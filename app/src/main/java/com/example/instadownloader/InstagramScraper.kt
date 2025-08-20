@@ -64,7 +64,7 @@ InstagramScraper {
             
             val mediaJson = dataJson.optJSONObject("xdt_shortcode_media")
             if (mediaJson == null) {
-                throw Exception("게시물을 찾을 수 없습니다. 비공개 게시물이거나 삭제된 게시물일 수 있습니다.")
+                throw Exception("로그인이 필요한 게시물 입니다")
             }
 
             return extractMediaUrls(mediaJson, quality)

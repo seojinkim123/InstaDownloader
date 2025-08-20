@@ -84,7 +84,17 @@ fun WebBrowserScreen() {
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
-                        userAgentString = "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36"
+                        cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                        loadsImagesAutomatically = true
+                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        allowFileAccess = true
+                        allowContentAccess = true
+                        setSupportZoom(true)
+                        builtInZoomControls = true
+                        displayZoomControls = false
+                        useWideViewPort = true
+                        loadWithOverviewMode = true
+                        userAgentString = "Mozilla/5.0 (Linux; Android 12; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                     }
                     
                     loadUrl("https://www.instagram.com")

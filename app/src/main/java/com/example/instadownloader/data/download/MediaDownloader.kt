@@ -15,6 +15,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
+import android.util.Base64
 
 class MediaDownloader(private val context: Context) {
     private val client = OkHttpClient()
@@ -151,6 +152,81 @@ class MediaDownloader(private val context: Context) {
             }
             
             Result.success(results)
+            
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun downloadBase64Video(
+        filename: String,
+        base64Data: String,
+        onProgress: (Int) -> Unit = {}
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            // Base64 데이터에서 데이터 URL 헤더 제거 (data:video/mp4;base64, 부분)
+            val base64Content = if (base64Data.contains(",")) {
+                base64Data.split(",")[1]
+            } else {
+                base64Data
+            }
+            
+            // Base64 디코딩
+            val videoBytes = Base64.decode(base64Content, Base64.DEFAULT)
+            onProgress(30)
+            
+            // MediaStore를 사용하여 갤러리에 저장
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, 
+                        Environment.DIRECTORY_MOVIES + "/InstaDownloader")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+            }
+            
+            val contentResolver = context.contentResolver
+            val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            
+            val uri = contentResolver.insert(collection, contentValues)
+                ?: return@withContext Result.failure(Exception("Failed to create MediaStore entry"))
+            
+            onProgress(50)
+            
+            // 비디오 데이터 저장
+            contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(videoBytes)
+            }
+            
+            onProgress(80)
+            
+            // Android Q 이상에서 IS_PENDING 플래그 제거
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                contentResolver.update(uri, contentValues, null, null)
+            }
+            
+            onProgress(90)
+            
+            // 데이터베이스에 메타데이터 저장
+            val mediaEntity = DownloadedMediaEntity(
+                id = UUID.randomUUID().toString(),
+                fileName = filename,
+                filePath = uri.toString(),
+                originalUrl = "blob://instagram-video",
+                downloadDate = System.currentTimeMillis(),
+                mediaType = "video",
+                fileSize = videoBytes.size.toLong(),
+                thumbnailPath = uri.toString()
+            )
+            
+            mediaDao.insertMedia(mediaEntity)
+            onProgress(100)
+            
+            Result.success(uri.toString())
             
         } catch (e: Exception) {
             Result.failure(e)

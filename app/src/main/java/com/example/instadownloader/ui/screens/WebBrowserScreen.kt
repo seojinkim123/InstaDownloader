@@ -209,7 +209,7 @@ fun WebBrowserScreen() {
                                             downloadBtn.innerHTML = '📥';
                                             downloadBtn.style.cssText = 
                                                 'position: absolute !important;' +
-                                                'top: 12px !important;' +
+                                                'top: 60px !important;' +
                                                 'left: 12px !important;' +
                                                 'width: 40px !important;' +
                                                 'height: 40px !important;' +

@@ -209,13 +209,17 @@ fun WebBrowserScreen() {
                         
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val url = request?.url?.toString()
-                            Log.d("WebView", "URL 로딩: $url")
+                            val headers = request?.requestHeaders
+                            Log.d("WebView", "🌐 URL 로딩: $url")
+                            Log.d("WebView", "📨 요청 헤더: $headers")
                             
                             // Instagram 도메인만 허용
                             if (url?.contains("instagram.com") == true || url?.contains("facebook.com") == true) {
+                                Log.d("WebView", "✅ 허용된 도메인: $url")
                                 return false // WebView에서 처리
                             }
                             
+                            Log.w("WebView", "❌ 차단된 도메인: $url")
                             return super.shouldOverrideUrlLoading(view, request)
                         }
                         
@@ -234,7 +238,20 @@ fun WebBrowserScreen() {
                         
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
                             super.onProgressChanged(view, newProgress)
-                            Log.d("WebView", "로딩 진행률: $newProgress%")
+                            Log.d("WebView", "📊 로딩 진행률: $newProgress%")
+                            
+                            // 쿠키 상태 로깅 (50% 진행 시점에서)
+                            if (newProgress == 50) {
+                                val cookieManager = CookieManager.getInstance()
+                                val hasCookie = cookieManager.hasCookies()
+                                Log.d("WebView", "🍪 쿠키 상태: $hasCookie")
+                                
+                                val url = view?.url
+                                if (url != null) {
+                                    val cookies = cookieManager.getCookie(url)
+                                    Log.d("WebView", "🍪 현재 쿠키: $cookies")
+                                }
+                            }
                         }
                     }
                     
@@ -311,15 +328,21 @@ fun WebBrowserScreen() {
                         // Mixed Content 허용 (HTTPS + HTTP)
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         
-                        // 🔧 중요: 데스크톱 User-Agent 사용 (인스타그램 모바일 제한 우회)
-                        userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                        // 🔧 중요: 최신 모바일 User-Agent 사용 (2025년 호환성)
+                        userAgentString = "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                         
-                        // 캐시 모드 설정
-                        cacheMode = WebSettings.LOAD_DEFAULT
+                        // 🔧 최적화된 캐시 모드 설정 (인스타그램용)
+                        cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
                         
-                        // 파일 접근 허용
-                        allowFileAccess = true
+                        // 🔧 보안 강화된 파일 접근 설정
+                        allowFileAccess = false  // 보안상 false로 변경
                         allowContentAccess = true
+                        
+                        // Deprecated 보안 설정 (여전히 필요)
+                        @Suppress("DEPRECATION")
+                        allowUniversalAccessFromFileURLs = false  // XSS 공격 방지
+                        @Suppress("DEPRECATION")
+                        allowFileAccessFromFileURLs = false  // 파일 접근 제한
                         
                         // Geolocation 허용
                         setGeolocationEnabled(true)
@@ -333,12 +356,23 @@ fun WebBrowserScreen() {
                         }
                     }
                     
-                    // 🔧 쿠키 관리자 설정 (로그인 세션 유지)
+                    // 🔧 강화된 쿠키 관리자 설정 (로그인 세션 유지)
                     val cookieManager = CookieManager.getInstance()
+                    
+                    // 🔧 쿠키 설정 (현재 minSdk가 24이므로 항상 최신 API 사용)
                     cookieManager.setAcceptCookie(true)
                     cookieManager.setAcceptThirdPartyCookies(this, true)
+                    Log.d("WebView", "✅ 쿠키 설정 완료")
+                    
+                    // 쿠키 즉시 동기화
+                    cookieManager.flush()
+                    Log.d("WebView", "🔄 쿠키 동기화 완료")
+                    
+                    // 파일 스키마 쿠키 허용 (deprecated but still needed)
                     @Suppress("DEPRECATION")
                     CookieManager.setAcceptFileSchemeCookies(true)
+                    
+                    Log.d("WebView", "🍪 쿠키 매니저 설정 완료")
                     
                     // 🔧 하드웨어 가속 활성화
                     setLayerType(WebView.LAYER_TYPE_HARDWARE, null)

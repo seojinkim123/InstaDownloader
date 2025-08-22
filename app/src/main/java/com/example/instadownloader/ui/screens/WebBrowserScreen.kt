@@ -5,10 +5,17 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
 import android.webkit.ConsoleMessage
+import android.webkit.CookieManager
+import android.webkit.WebSettings
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.SslErrorHandler
+import android.net.http.SslError
 import android.util.Log
 import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
+import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -108,6 +115,7 @@ fun WebBrowserScreen() {
     var webView: WebView? by remember { mutableStateOf(null) }
     var canGoBack by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+    var currentUrl by remember { mutableStateOf("") }
     var showBottomSheet by remember { mutableStateOf(false) }
     var mediaItems by remember { mutableStateOf<List<InstagramMediaItem>>(emptyList()) }
     var selectedItems by remember { mutableStateOf<List<InstagramMediaItem>>(emptyList()) }
@@ -155,6 +163,13 @@ fun WebBrowserScreen() {
             }
             
             Spacer(modifier = Modifier.weight(1f))
+            
+            // 현재 URL 표시
+            Text(
+                text = currentUrl.take(30) + if (currentUrl.length > 30) "..." else "",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         
         HorizontalDivider()
@@ -163,556 +178,50 @@ fun WebBrowserScreen() {
         AndroidView(
             factory = { context ->
                 WebView(context).apply {
+                    // 🔧 핵심 수정사항들
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                            super.onPageStarted(view, url, favicon)
                             isLoading = true
+                            currentUrl = url ?: ""
+                            Log.d("WebView", "페이지 시작: $url")
                         }
                         
                         override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
                             isLoading = false
                             canGoBack = view?.canGoBack() ?: false
+                            currentUrl = url ?: ""
+                            Log.d("WebView", "페이지 완료: $url")
                             
-                            // Instagram 포스트 감지 및 다운로드 버튼 추가 JavaScript 주입
-                            view?.evaluateJavascript("""
-                                (function() {
-                                    console.log('Instagram Download Script Started');
-                                    
-                                    function addDownloadButtons() {
-                                        const articles = document.querySelectorAll('article');
-                                        console.log('Found articles: ' + articles.length);
-                                        
-                                        articles.forEach((article, index) => {
-                                            // 이미 버튼이 있으면 스킵
-                                            if (article.querySelector('.download-btn-custom')) {
-                                                return;
-                                            }
-                                            
-                                            // 포스트에 미디어가 있는지 확인
-                                            const hasMedia = article.querySelector('img[src*="scontent"]') || article.querySelector('video');
-                                            if (!hasMedia) {
-                                                return;
-                                            }
-                                            
-                                            // 포스트가 화면에 보이는지 확인 (성능 최적화)
-                                            const rect = article.getBoundingClientRect();
-                                            const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
-                                            if (!isVisible) {
-                                                return;
-                                            }
-                                            
-                                            console.log('Adding download button to post ' + index);
-                                            
-                                            article.style.position = 'relative';
-                                            
-                                            const downloadBtn = document.createElement('div');
-                                            downloadBtn.className = 'download-btn-custom';
-                                            downloadBtn.innerHTML = '📥';
-                                            downloadBtn.style.cssText = 
-                                                'position: absolute !important;' +
-                                                'top: 60px !important;' +
-                                                'left: 12px !important;' +
-                                                'width: 40px !important;' +
-                                                'height: 40px !important;' +
-                                                'border-radius: 50% !important;' +
-                                                'background: rgba(0,0,0,0.8) !important;' +
-                                                'color: white !important;' +
-                                                'cursor: pointer !important;' +
-                                                'z-index: 9999 !important;' +
-                                                'font-size: 20px !important;' +
-                                                'display: flex !important;' +
-                                                'align-items: center !important;' +
-                                                'justify-content: center !important;' +
-                                                'box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;' +
-                                                'transition: all 0.2s ease !important;';
-                                            
-                                            downloadBtn.addEventListener('mouseenter', function() {
-                                                this.style.transform = 'scale(1.1)';
-                                                this.style.background = 'rgba(0,0,0,0.9)';
-                                            });
-                                            
-                                            downloadBtn.addEventListener('mouseleave', function() {
-                                                this.style.transform = 'scale(1)';
-                                                this.style.background = 'rgba(0,0,0,0.8)';
-                                            });
-                                            
-                                            downloadBtn.addEventListener('click', async function(e) {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                
-                                                console.log('Download button clicked');
-                                                
-                                                this.innerHTML = '⏳';
-                                                this.style.pointerEvents = 'none';
-                                                
-                                                try {
-                                                    // 즉시 바텀 시트 띄우기 (로딩 상태로)
-                                                    Android.showDownloadDialog('image::loading');
-                                                    
-                                                    const mediaUrls = await extractMediaFromPost(article);
-                                                    if (mediaUrls.length > 0) {
-                                                        Android.showDownloadDialog(mediaUrls.join('||'));
-                                                    }
-                                                } catch (error) {
-                                                    console.log('Error extracting media: ' + error);
-                                                } finally {
-                                                    this.innerHTML = '📥';
-                                                    this.style.pointerEvents = 'auto';
-                                                }
-                                            });
-                                            
-                                            article.appendChild(downloadBtn);
-                                        });
-                                    }
-                                    
-                                    async function extractMediaFromPost(article) {
-                                        console.log('Extracting media from post');
-                                        
-                                        const mediaItems = [];
-                                        
-                                        // 메인 컨테이너 찾기 (article > div > div[1])
-                                        const divs = article.querySelectorAll(':scope > div');
-                                        let mainContainer = null;
-                                        
-                                        if (divs.length >= 1) {
-                                            const childDivs = divs[0].querySelectorAll(':scope > div');
-                                            if (childDivs.length >= 2) {
-                                                mainContainer = childDivs[1]; // 두 번째 div가 메인 컨테이너
-                                            }
-                                        }
-                                        
-                                        if (!mainContainer) {
-                                            mainContainer = article;
-                                        }
-                                        
-                                        console.log('Main container found');
-                                        
-                                        // 캐러셀 확인 (button[aria-label] 존재 여부)
-                                        const carouselButtons = mainContainer.querySelectorAll('button[aria-label]');
-                                        const isCarousel = carouselButtons.length > 0;
-                                        
-                                        console.log('Is carousel: ' + isCarousel);
-                                        
-                                        if (isCarousel) {
-                                            // 캐러셀 처리 (실시간 업데이트)
-                                            await extractCarouselMediaWithUpdates(mainContainer, mediaItems);
-                                        } else {
-                                            // 단일 이미지/영상 처리
-                                            extractSingleMedia(mainContainer, mediaItems);
-                                        }
-                                        
-                                        console.log('Total media found: ' + mediaItems.length);
-                                        return mediaItems;
-                                    }
-                                    
-                                    function extractSingleMedia(container, mediaItems) {
-                                        const images = container.querySelectorAll('img[src*="scontent"]');
-                                        images.forEach(img => {
-                                            if (!img.src.includes('profile')) {
-                                                mediaItems.push('image::' + img.src);
-                                            }
-                                        });
-                                        
-                                        const videos = container.querySelectorAll('video');
-                                        videos.forEach(video => {
-                                            if (video.src) {
-                                                mediaItems.push('video::' + video.src);
-                                            }
-                                        });
-                                    }
-                                    
-                                    async function extractCarouselMediaWithUpdates(container, mediaItems) {
-                                        console.log('Processing carousel with real-time updates');
-                                        
-                                        let currentIndex = 0;
-                                        let maxAttempts = 25;
-                                        let consecutiveFailures = 0;
-                                        const maxConsecutiveFailures = 8;
-                                        let hasCollectedInThisIteration = false;
-                                        
-                                        while (currentIndex < maxAttempts && consecutiveFailures < maxConsecutiveFailures) {
-                                            try {
-                                                console.log('Carousel step ' + (currentIndex + 1));
-                                                
-                                                const ul = container.querySelector('ul');
-                                                if (!ul) {
-                                                    console.log('No ul found');
-                                                    break;
-                                                }
-                                                
-                                                const lis = ul.querySelectorAll('li');
-                                                hasCollectedInThisIteration = false;
-                                                
-                                                // 모든 li 요소를 확인하여 현재 보이는 미디어 찾기
-                                                lis.forEach((li, liIndex) => {
-                                                    if (liIndex === 0) return; // 첫 번째 li는 무시
-                                                    
-                                                    const rect = li.getBoundingClientRect();
-                                                    if (rect.width > 100 && rect.height > 100) {
-                                                        // 이미지 확인
-                                                        const img = li.querySelector('img[src*="scontent"]');
-                                                        if (img && !img.src.includes('profile')) {
-                                                            const isDuplicate = mediaItems.some(item => item.includes(img.src));
-                                                            if (!isDuplicate) {
-                                                                mediaItems.push('image::' + img.src);
-                                                                hasCollectedInThisIteration = true;
-                                                            }
-                                                        }
-                                                        
-                                                        // 비디오 확인
-                                                        const video = li.querySelector('video');
-                                                        if (video) {
-                                                            let videoUrl = video.src;
-                                                            if (!videoUrl) {
-                                                                const source = video.querySelector('source');
-                                                                if (source) videoUrl = source.src;
-                                                            }
-                                                            
-                                                            if (videoUrl && !mediaItems.some(item => item.includes(videoUrl))) {
-                                                                const videoType = videoUrl.startsWith('blob:') ? 'video-blob' : 'video';
-                                                                mediaItems.push(videoType + '::' + videoUrl);
-                                                                hasCollectedInThisIteration = true;
-                                                            }
-                                                        }
-                                                    }
-                                                });
-                                                
-                                                // 새 미디어를 찾았으면 바로 UI 업데이트
-                                                if (hasCollectedInThisIteration) {
-                                                    try {
-                                                        Android.updateMediaList(mediaItems.join('||'));
-                                                        console.log('📱 Updated UI with ' + mediaItems.length + ' media items');
-                                                    } catch (e) {
-                                                        console.log('Failed to update UI: ' + e);
-                                                    }
-                                                    consecutiveFailures = 0;
-                                                } else {
-                                                    consecutiveFailures++;
-                                                }
-                                                
-                                                // 다음 버튼 찾기
-                                                const nextButtons = container.querySelectorAll('button[aria-label]');
-                                                let nextButton = null;
-                                                
-                                                for (let btn of nextButtons) {
-                                                    const ariaLabel = btn.getAttribute('aria-label');
-                                                    const rect = btn.getBoundingClientRect();
-                                                    const containerRect = container.getBoundingClientRect();
-                                                    
-                                                    if (rect.left > containerRect.left + containerRect.width / 2 && 
-                                                        rect.width > 0 && rect.height > 0 &&
-                                                        (ariaLabel && (ariaLabel.includes('Next') || ariaLabel.includes('다음') || ariaLabel.includes('넘기')))) {
-                                                        nextButton = btn;
-                                                        break;
-                                                    }
-                                                }
-                                                
-                                                if (!nextButton) {
-                                                    console.log('🏁 No more next button found - final collection');
-                                                    
-                                                    // 마지막 수집
-                                                    const finalUl = container.querySelector('ul');
-                                                    if (finalUl) {
-                                                        const finalLis = finalUl.querySelectorAll('li');
-                                                        let finalCollected = false;
-                                                        
-                                                        finalLis.forEach((li, liIndex) => {
-                                                            if (liIndex === 0) return;
-                                                            
-                                                            const rect = li.getBoundingClientRect();
-                                                            if (rect.width > 100 && rect.height > 100) {
-                                                                const img = li.querySelector('img[src*="scontent"]');
-                                                                if (img && !img.src.includes('profile')) {
-                                                                    const isDuplicate = mediaItems.some(item => item.includes(img.src));
-                                                                    if (!isDuplicate) {
-                                                                        mediaItems.push('image::' + img.src);
-                                                                        finalCollected = true;
-                                                                    }
-                                                                }
-                                                                
-                                                                const video = li.querySelector('video');
-                                                                if (video) {
-                                                                    let videoUrl = video.src;
-                                                                    if (!videoUrl) {
-                                                                        const source = video.querySelector('source');
-                                                                        if (source) videoUrl = source.src;
-                                                                    }
-                                                                    
-                                                                    if (videoUrl && !mediaItems.some(item => item.includes(videoUrl))) {
-                                                                        const videoType = videoUrl.startsWith('blob:') ? 'video-blob' : 'video';
-                                                                        mediaItems.push(videoType + '::' + videoUrl);
-                                                                        finalCollected = true;
-                                                                    }
-                                                                }
-                                                            }
-                                                        });
-                                                        
-                                                        if (finalCollected) {
-                                                            try {
-                                                                Android.updateMediaList(mediaItems.join('||'));
-                                                            } catch (e) {}
-                                                        }
-                                                    }
-                                                    
-                                                    break;
-                                                }
-                                                
-                                                nextButton.click();
-                                                await new Promise(resolve => setTimeout(resolve, 100)); // 초고속!
-                                                currentIndex++;
-                                                
-                                            } catch (e) {
-                                                console.log('❌ Error in carousel step ' + currentIndex + ': ' + e);
-                                                consecutiveFailures++;
-                                                currentIndex++;
-                                            }
-                                        }
-                                        
-                                        console.log('🎯 Carousel complete. Total: ' + mediaItems.length + ' media');
-                                    }
-                                    
-                                    async function extractCarouselMedia(container, mediaItems) {
-                                        console.log('Processing carousel');
-                                        
-                                        let currentIndex = 0;
-                                        let maxAttempts = 25;
-                                        let consecutiveFailures = 0;
-                                        const maxConsecutiveFailures = 8;
-                                        let hasCollectedInThisIteration = false;
-                                        
-                                        while (currentIndex < maxAttempts && consecutiveFailures < maxConsecutiveFailures) {
-                                            try {
-                                                console.log('Carousel step ' + (currentIndex + 1));
-                                                
-                                                const ul = container.querySelector('ul');
-                                                if (!ul) {
-                                                    console.log('No ul found');
-                                                    break;
-                                                }
-                                                
-                                                const lis = ul.querySelectorAll('li');
-                                                console.log('Found ' + lis.length + ' li elements');
-                                                
-                                                // 현재 페이지에서 실제로 보이는 미디어 수집
-                                                hasCollectedInThisIteration = false;
-                                                
-                                                // 모든 li 요소를 확인하여 현재 보이는 미디어 찾기
-                                                lis.forEach((li, liIndex) => {
-                                                    if (liIndex === 0) return; // 첫 번째 li는 무시
-                                                    
-                                                    const rect = li.getBoundingClientRect();
-                                                    if (rect.width > 100 && rect.height > 100) {
-                                                        console.log('Checking visible li at index ' + liIndex);
-                                                        
-                                                        // 이미지 확인
-                                                        const img = li.querySelector('img[src*="scontent"]');
-                                                        if (img && !img.src.includes('profile')) {
-                                                            const isDuplicate = mediaItems.some(item => item.includes(img.src));
-                                                            if (!isDuplicate) {
-                                                                mediaItems.push('image::' + img.src);
-                                                                console.log('✅ Added image: ' + img.src.substring(img.src.lastIndexOf('/') + 1, img.src.lastIndexOf('?') !== -1 ? img.src.lastIndexOf('?') : img.src.length));
-                                                                hasCollectedInThisIteration = true;
-                                                            }
-                                                        }
-                                                        
-                                                        // 비디오 확인
-                                                        const video = li.querySelector('video');
-                                                        if (video) {
-                                                            let videoUrl = video.src;
-                                                            if (!videoUrl) {
-                                                                const source = video.querySelector('source');
-                                                                if (source) videoUrl = source.src;
-                                                            }
-                                                            
-                                                            if (videoUrl && !mediaItems.some(item => item.includes(videoUrl))) {
-                                                                const videoType = videoUrl.startsWith('blob:') ? 'video-blob' : 'video';
-                                                                mediaItems.push(videoType + '::' + videoUrl);
-                                                                console.log('✅ Added video: ' + (videoUrl.length > 50 ? videoUrl.substring(0, 50) + '...' : videoUrl));
-                                                                hasCollectedInThisIteration = true;
-                                                            }
-                                                        }
-                                                    }
-                                                });
-                                                
-                                                if (hasCollectedInThisIteration) {
-                                                    consecutiveFailures = 0;
-                                                } else {
-                                                    consecutiveFailures++;
-                                                }
-                                                
-                                                // 다음 버튼 찾기
-                                                const nextButtons = container.querySelectorAll('button[aria-label]');
-                                                let nextButton = null;
-                                                
-                                                for (let btn of nextButtons) {
-                                                    const ariaLabel = btn.getAttribute('aria-label');
-                                                    const rect = btn.getBoundingClientRect();
-                                                    const containerRect = container.getBoundingClientRect();
-                                                    
-                                                    // 오른쪽에 있고, 보이는 상태이며, Next 관련 레이블을 가진 버튼
-                                                    if (rect.left > containerRect.left + containerRect.width / 2 && 
-                                                        rect.width > 0 && rect.height > 0 &&
-                                                        (ariaLabel && (ariaLabel.includes('Next') || ariaLabel.includes('다음') || ariaLabel.includes('넘기')))) {
-                                                        nextButton = btn;
-                                                        break;
-                                                    }
-                                                }
-                                                
-                                                if (!nextButton) {
-                                                    console.log('🏁 No more next button found - this should be the last slide');
-                                                    
-                                                    // 마지막 슬라이드에서 한 번 더 미디어 수집 시도
-                                                    console.log('Final collection attempt...');
-                                                    const finalUl = container.querySelector('ul');
-                                                    if (finalUl) {
-                                                        const finalLis = finalUl.querySelectorAll('li');
-                                                        finalLis.forEach((li, liIndex) => {
-                                                            if (liIndex === 0) return;
-                                                            
-                                                            const rect = li.getBoundingClientRect();
-                                                            if (rect.width > 100 && rect.height > 100) {
-                                                                const img = li.querySelector('img[src*="scontent"]');
-                                                                if (img && !img.src.includes('profile')) {
-                                                                    const isDuplicate = mediaItems.some(item => item.includes(img.src));
-                                                                    if (!isDuplicate) {
-                                                                        mediaItems.push('image::' + img.src);
-                                                                        console.log('✅ Final image added: ' + img.src.substring(img.src.lastIndexOf('/') + 1, img.src.lastIndexOf('?') !== -1 ? img.src.lastIndexOf('?') : img.src.length));
-                                                                    }
-                                                                }
-                                                                
-                                                                const video = li.querySelector('video');
-                                                                if (video) {
-                                                                    let videoUrl = video.src;
-                                                                    if (!videoUrl) {
-                                                                        const source = video.querySelector('source');
-                                                                        if (source) videoUrl = source.src;
-                                                                    }
-                                                                    
-                                                                    if (videoUrl && !mediaItems.some(item => item.includes(videoUrl))) {
-                                                                        const videoType = videoUrl.startsWith('blob:') ? 'video-blob' : 'video';
-                                                                        mediaItems.push(videoType + '::' + videoUrl);
-                                                                        console.log('✅ Final video added');
-                                                                    }
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                                    
-                                                    break;
-                                                }
-                                                
-                                                console.log('➡️ Clicking next button...');
-                                                nextButton.click();
-                                                await new Promise(resolve => setTimeout(resolve, 600));
-                                                currentIndex++;
-                                                
-                                            } catch (e) {
-                                                console.log('❌ Error in carousel step ' + currentIndex + ': ' + e);
-                                                consecutiveFailures++;
-                                                currentIndex++;
-                                            }
-                                        }
-                                        
-                                        console.log('🎯 Carousel processing complete. Total media: ' + mediaItems.length);
-                                    }
-                                    
-                                    // 즉시 실행
-                                    setTimeout(addDownloadButtons, 1000);
-                                    
-                                    // 주기적으로 체크 (더 자주)
-                                    setInterval(addDownloadButtons, 2000);
-                                    
-                                    // 스크롤 이벤트 리스너
-                                    let scrollTimeout;
-                                    window.addEventListener('scroll', function() {
-                                        clearTimeout(scrollTimeout);
-                                        scrollTimeout = setTimeout(addDownloadButtons, 300);
-                                    });
-                                    
-                                    // DOM 변경 감지 (Instagram이 동적으로 콘텐츠를 로드하므로)
-                                    const observer = new MutationObserver(function(mutations) {
-                                        let shouldCheck = false;
-                                        mutations.forEach(function(mutation) {
-                                            if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-                                                for (let i = 0; i < mutation.addedNodes.length; i++) {
-                                                    const node = mutation.addedNodes[i];
-                                                    if (node.nodeType === 1 && (node.tagName === 'ARTICLE' || node.querySelector('article'))) {
-                                                        shouldCheck = true;
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        });
-                                        
-                                        if (shouldCheck) {
-                                            setTimeout(addDownloadButtons, 500);
-                                        }
-                                    });
-                                    
-                                    observer.observe(document.body, {
-                                        childList: true,
-                                        subtree: true
-                                    });
-                                    
-                                    // Blob URL을 Base64로 변환하는 함수
-                                    async function blobToBase64(blobUrl) {
-                                        try {
-                                            console.log('Converting blob URL to base64: ' + blobUrl.substring(0, 50) + '...');
-                                            
-                                            const response = await fetch(blobUrl);
-                                            if (!response.ok) {
-                                                throw new Error('Failed to fetch blob: ' + response.status);
-                                            }
-                                            
-                                            const blob = await response.blob();
-                                            console.log('Blob size: ' + Math.round(blob.size / 1024) + ' KB');
-                                            
-                                            // 파일 크기 체크 (50MB 제한)
-                                            if (blob.size > 50 * 1024 * 1024) {
-                                                throw new Error('File too large: ' + Math.round(blob.size / 1024 / 1024) + 'MB (max 50MB)');
-                                            }
-                                            
-                                            return new Promise((resolve, reject) => {
-                                                const reader = new FileReader();
-                                                reader.onloadend = () => {
-                                                    console.log('Base64 conversion completed');
-                                                    resolve(reader.result);
-                                                };
-                                                reader.onerror = () => {
-                                                    reject(new Error('Failed to read blob as base64'));
-                                                };
-                                                reader.readAsDataURL(blob);
-                                            });
-                                        } catch (error) {
-                                            console.log('Error converting blob to base64: ' + error.message);
-                                            throw error;
-                                        }
-                                    }
-                                    
-                                    // Blob 비디오 처리 함수
-                                    async function processBlobVideo(blobUrl, filename) {
-                                        try {
-                                            console.log('Processing blob video: ' + filename);
-                                            
-                                            // 사용자에게 처리 중임을 알림
-                                            Android.notifyBlobProcessing(filename, 'start');
-                                            
-                                            const base64Data = await blobToBase64(blobUrl);
-                                            
-                                            // Base64 데이터를 Android로 전달
-                                            Android.downloadBlobVideo(filename, base64Data);
-                                            
-                                        } catch (error) {
-                                            console.log('Failed to process blob video: ' + error.message);
-                                            Android.notifyBlobProcessing(filename, 'error::' + error.message);
-                                        }
-                                    }
-                                    
-                                    // Blob URL 처리를 위한 전역 함수로 노출
-                                    window.processBlobVideo = processBlobVideo;
-                                    
-                                    console.log('Download script setup complete');
-                                })();
-                            """, null)
+                            // 로그인 페이지인 경우 스크립트 주입하지 않음
+                            if (url?.contains("accounts/login") == false) {
+                                // Instagram 포스트 감지 및 다운로드 버튼 추가 JavaScript 주입
+                                view?.evaluateJavascript(getInstagramScript(), null)
+                            }
+                        }
+                        
+                        override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                            // SSL 에러 무시 (개발용, 실제 배포시에는 주의)
+                            handler?.proceed()
+                            Log.w("WebView", "SSL 에러 무시: ${error?.toString()}")
+                        }
+                        
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            val url = request?.url?.toString()
+                            Log.d("WebView", "URL 로딩: $url")
+                            
+                            // Instagram 도메인만 허용
+                            if (url?.contains("instagram.com") == true || url?.contains("facebook.com") == true) {
+                                return false // WebView에서 처리
+                            }
+                            
+                            return super.shouldOverrideUrlLoading(view, request)
+                        }
+                        
+                        override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                            super.onReceivedError(view, errorCode, description, failingUrl)
+                            Log.e("WebView", "에러 발생: $description ($errorCode) - $failingUrl")
                         }
                     }
                     
@@ -721,6 +230,11 @@ fun WebBrowserScreen() {
                         override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                             Log.d("WebView", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()}")
                             return true
+                        }
+                        
+                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                            super.onProgressChanged(view, newProgress)
+                            Log.d("WebView", "로딩 진행률: $newProgress%")
                         }
                     }
                     
@@ -772,18 +286,64 @@ fun WebBrowserScreen() {
                         "Android"
                     )
                     
-                    // 웹뷰 기본 설정
+                    // 🔧 핵심 웹뷰 설정 (인스타그램 로그인 문제 해결)
                     settings.apply {
+                        // JavaScript 활성화
                         javaScriptEnabled = true
+                        javaScriptCanOpenWindowsAutomatically = true
+                        
+                        // DOM Storage 활성화
                         domStorageEnabled = true
+                        
+                        // 데이터베이스 활성화 (deprecated but still works)
+                        @Suppress("DEPRECATION")
+                        databaseEnabled = true
+                        
+                        // 뷰포트 설정
                         loadWithOverviewMode = true
                         useWideViewPort = true
+                        
+                        // 줌 설정
                         setSupportZoom(true)
                         builtInZoomControls = true
                         displayZoomControls = false
+                        
+                        // Mixed Content 허용 (HTTPS + HTTP)
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                        
+                        // 🔧 중요: 데스크톱 User-Agent 사용 (인스타그램 모바일 제한 우회)
+                        userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                        
+                        // 캐시 모드 설정
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                        
+                        // 파일 접근 허용
+                        allowFileAccess = true
+                        allowContentAccess = true
+                        
+                        // Geolocation 허용
+                        setGeolocationEnabled(true)
+                        
+                        // 미디어 재생 설정
+                        mediaPlaybackRequiresUserGesture = false
+                        
+                        // 안전하지 않은 콘텐츠 허용
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            safeBrowsingEnabled = false
+                        }
                     }
                     
+                    // 🔧 쿠키 관리자 설정 (로그인 세션 유지)
+                    val cookieManager = CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
+                    @Suppress("DEPRECATION")
+                    CookieManager.setAcceptFileSchemeCookies(true)
                     
+                    // 🔧 하드웨어 가속 활성화
+                    setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
+                    
+                    // Instagram 로드
                     loadUrl("https://www.instagram.com")
                     webView = this
                 }
@@ -841,6 +401,304 @@ fun WebBrowserScreen() {
             )
         }
     }
+}
+
+
+// Instagram 스크립트를 별도 함수로 분리
+private fun getInstagramScript(): String {
+    return """
+        (function() {
+            console.log('Instagram Download Script Started');
+            
+            function addDownloadButtons() {
+                const articles = document.querySelectorAll('article');
+                console.log('Found articles: ' + articles.length);
+                
+                articles.forEach((article, index) => {
+                    // 이미 버튼이 있으면 스킵
+                    if (article.querySelector('.download-btn-custom')) {
+                        return;
+                    }
+                    
+                    // 포스트에 미디어가 있는지 확인
+                    const hasMedia = article.querySelector('img[src*="scontent"]') || article.querySelector('video');
+                    if (!hasMedia) {
+                        return;
+                    }
+                    
+                    // 포스트가 화면에 보이는지 확인 (성능 최적화)
+                    const rect = article.getBoundingClientRect();
+                    const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+                    if (!isVisible) {
+                        return;
+                    }
+                    
+                    console.log('Adding download button to post ' + index);
+                    
+                    article.style.position = 'relative';
+                    
+                    const downloadBtn = document.createElement('div');
+                    downloadBtn.className = 'download-btn-custom';
+                    downloadBtn.innerHTML = '🔥';
+                    downloadBtn.style.cssText = 
+                        'position: absolute !important;' +
+                        'top: 60px !important;' +
+                        'left: 12px !important;' +
+                        'width: 40px !important;' +
+                        'height: 40px !important;' +
+                        'border-radius: 50% !important;' +
+                        'background: rgba(0,0,0,0.8) !important;' +
+                        'color: white !important;' +
+                        'cursor: pointer !important;' +
+                        'z-index: 9999 !important;' +
+                        'font-size: 20px !important;' +
+                        'display: flex !important;' +
+                        'align-items: center !important;' +
+                        'justify-content: center !important;' +
+                        'box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;' +
+                        'transition: all 0.2s ease !important;';
+                    
+                    downloadBtn.addEventListener('mouseenter', function() {
+                        this.style.transform = 'scale(1.1)';
+                        this.style.background = 'rgba(0,0,0,0.9)';
+                    });
+                    
+                    downloadBtn.addEventListener('mouseleave', function() {
+                        this.style.transform = 'scale(1)';
+                        this.style.background = 'rgba(0,0,0,0.8)';
+                    });
+                    
+                    downloadBtn.addEventListener('click', async function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        console.log('Download button clicked');
+                        
+                        this.innerHTML = '⏳';
+                        this.style.pointerEvents = 'none';
+                        
+                        try {
+                            // 즉시 바텀 시트 띄우기 (로딩 상태로)
+                            Android.showDownloadDialog('image::loading');
+                            
+                            const mediaUrls = await extractMediaFromPost(article);
+                            if (mediaUrls.length > 0) {
+                                Android.showDownloadDialog(mediaUrls.join('||'));
+                            }
+                        } catch (error) {
+                            console.log('Error extracting media: ' + error);
+                        } finally {
+                            this.innerHTML = '🔥';
+                            this.style.pointerEvents = 'auto';
+                        }
+                    });
+                    
+                    article.appendChild(downloadBtn);
+                });
+            }
+            
+            async function extractMediaFromPost(article) {
+                console.log('Extracting media from post');
+                
+                const mediaItems = [];
+                
+                // 메인 컨테이너 찾기 (article > div > div[1])
+                const divs = article.querySelectorAll(':scope > div');
+                let mainContainer = null;
+                
+                if (divs.length >= 1) {
+                    const childDivs = divs[0].querySelectorAll(':scope > div');
+                    if (childDivs.length >= 2) {
+                        mainContainer = childDivs[1]; // 두 번째 div가 메인 컨테이너
+                    }
+                }
+                
+                if (!mainContainer) {
+                    mainContainer = article;
+                }
+                
+                console.log('Main container found');
+                
+                // 캐러셀 확인 (button[aria-label] 존재 여부)
+                const carouselButtons = mainContainer.querySelectorAll('button[aria-label]');
+                const isCarousel = carouselButtons.length > 0;
+                
+                console.log('Is carousel: ' + isCarousel);
+                
+                if (isCarousel) {
+                    // 캐러셀 처리 (실시간 업데이트)
+                    await extractCarouselMediaWithUpdates(mainContainer, mediaItems);
+                } else {
+                    // 단일 이미지/영상 처리
+                    extractSingleMedia(mainContainer, mediaItems);
+                }
+                
+                console.log('Total media found: ' + mediaItems.length);
+                return mediaItems;
+            }
+            
+            function extractSingleMedia(container, mediaItems) {
+                const images = container.querySelectorAll('img[src*="scontent"]');
+                images.forEach(img => {
+                    if (!img.src.includes('profile')) {
+                        mediaItems.push('image::' + img.src);
+                    }
+                });
+                
+                const videos = container.querySelectorAll('video');
+                videos.forEach(video => {
+                    if (video.src) {
+                        mediaItems.push('video::' + video.src);
+                    }
+                });
+            }
+            
+            async function extractCarouselMediaWithUpdates(container, mediaItems) {
+                console.log('Processing carousel with real-time updates');
+                
+                let currentIndex = 0;
+                let maxAttempts = 25;
+                let consecutiveFailures = 0;
+                const maxConsecutiveFailures = 8;
+                let hasCollectedInThisIteration = false;
+                
+                while (currentIndex < maxAttempts && consecutiveFailures < maxConsecutiveFailures) {
+                    try {
+                        console.log('Carousel step ' + (currentIndex + 1));
+                        
+                        const ul = container.querySelector('ul');
+                        if (!ul) {
+                            console.log('No ul found');
+                            break;
+                        }
+                        
+                        const lis = ul.querySelectorAll('li');
+                        hasCollectedInThisIteration = false;
+                        
+                        // 모든 li 요소를 확인하여 현재 보이는 미디어 찾기
+                        lis.forEach((li, liIndex) => {
+                            if (liIndex === 0) return; // 첫 번째 li는 무시
+                            
+                            const rect = li.getBoundingClientRect();
+                            if (rect.width > 100 && rect.height > 100) {
+                                // 이미지 확인
+                                const img = li.querySelector('img[src*="scontent"]');
+                                if (img && !img.src.includes('profile')) {
+                                    const isDuplicate = mediaItems.some(item => item.includes(img.src));
+                                    if (!isDuplicate) {
+                                        mediaItems.push('image::' + img.src);
+                                        hasCollectedInThisIteration = true;
+                                    }
+                                }
+                                
+                                // 비디오 확인
+                                const video = li.querySelector('video');
+                                if (video) {
+                                    let videoUrl = video.src;
+                                    if (!videoUrl) {
+                                        const source = video.querySelector('source');
+                                        if (source) videoUrl = source.src;
+                                    }
+                                    
+                                    if (videoUrl && !mediaItems.some(item => item.includes(videoUrl))) {
+                                        const videoType = videoUrl.startsWith('blob:') ? 'video-blob' : 'video';
+                                        mediaItems.push(videoType + '::' + videoUrl);
+                                        hasCollectedInThisIteration = true;
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // 새 미디어를 찾았으면 바로 UI 업데이트
+                        if (hasCollectedInThisIteration) {
+                            try {
+                                Android.updateMediaList(mediaItems.join('||'));
+                                console.log('📱 Updated UI with ' + mediaItems.length + ' media items');
+                            } catch (e) {
+                                console.log('Failed to update UI: ' + e);
+                            }
+                            consecutiveFailures = 0;
+                        } else {
+                            consecutiveFailures++;
+                        }
+                        
+                        // 다음 버튼 찾기
+                        const nextButtons = container.querySelectorAll('button[aria-label]');
+                        let nextButton = null;
+                        
+                        for (let btn of nextButtons) {
+                            const ariaLabel = btn.getAttribute('aria-label');
+                            const rect = btn.getBoundingClientRect();
+                            const containerRect = container.getBoundingClientRect();
+                            
+                            if (rect.left > containerRect.left + containerRect.width / 2 && 
+                                rect.width > 0 && rect.height > 0 &&
+                                (ariaLabel && (ariaLabel.includes('Next') || ariaLabel.includes('다음') || ariaLabel.includes('넘기')))) {
+                                nextButton = btn;
+                                break;
+                            }
+                        }
+                        
+                        if (!nextButton) {
+                            console.log('🏁 No more next button found - final collection');
+                            break;
+                        }
+                        
+                        nextButton.click();
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        currentIndex++;
+                        
+                    } catch (e) {
+                        console.log('❌ Error in carousel step ' + currentIndex + ': ' + e);
+                        consecutiveFailures++;
+                        currentIndex++;
+                    }
+                }
+                
+                console.log('🎯 Carousel complete. Total: ' + mediaItems.length + ' media');
+            }
+            
+            // 즉시 실행
+            setTimeout(addDownloadButtons, 1000);
+            
+            // 주기적으로 체크 (더 자주)
+            setInterval(addDownloadButtons, 2000);
+            
+            // 스크롤 이벤트 리스너
+            let scrollTimeout;
+            window.addEventListener('scroll', function() {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(addDownloadButtons, 300);
+            });
+            
+            // DOM 변경 감지 (Instagram이 동적으로 콘텐츠를 로드하므로)
+            const observer = new MutationObserver(function(mutations) {
+                let shouldCheck = false;
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+                        for (let i = 0; i < mutation.addedNodes.length; i++) {
+                            const node = mutation.addedNodes[i];
+                            if (node.nodeType === 1 && (node.tagName === 'ARTICLE' || node.querySelector('article'))) {
+                                shouldCheck = true;
+                                break;
+                            }
+                        }
+                    }
+                });
+                
+                if (shouldCheck) {
+                    setTimeout(addDownloadButtons, 500);
+                }
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            
+            console.log('Download script setup complete');
+        })();
+    """
 }
 
 @Composable

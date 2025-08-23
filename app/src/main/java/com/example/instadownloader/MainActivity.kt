@@ -24,7 +24,7 @@ import com.example.instadownloader.ui.screens.GalleryScreen
 import com.example.instadownloader.ui.screens.UrlDownloaderScreen
 import com.example.instadownloader.ui.screens.WebBrowserScreen
 import com.example.instadownloader.ui.theme.InstaDownloaderTheme
-
+//나는 version3-branch 의 첫커밋임
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     object UrlDownloader : Screen("url_downloader", "다운로더", Icons.Default.Home)
     object WebBrowser : Screen("web_browser", "브라우저", Icons.Default.Search)

@@ -228,6 +228,7 @@ private fun injectOverlayDetectionScript(webView: WebView?) {
                         );
                         
                         if (isOverlay) {
+                            console.log('오버레이발견 !!');
                             console.log('Detected overlay:', selector, overlay);
                             handleOverlay(overlay);
                             overlay.dataset.overlayHandled = 'true';
@@ -238,7 +239,7 @@ private fun injectOverlayDetectionScript(webView: WebView?) {
                 
                 if (handledOverlays > 0) {
                     console.log('Handled', handledOverlays, 'overlays');
-                    showOverlayNotification('감지된 오버레이 ' + handledOverlays + '개를 처리했습니다');
+                    showOverlayNotification('감지된 오버레이 ' + handledOverlays + '개를 처리했습니다', 'success');
                 }
             }
             
@@ -293,7 +294,8 @@ private fun injectOverlayDetectionScript(webView: WebView?) {
             }
             
             // 오버레이 처리 알림
-            function showOverlayNotification(message) {
+            function showOverlayNotification(message, type) {
+                type = type || 'success';
                 const notification = document.createElement('div');
                 notification.innerHTML = message;
                 notification.style.cssText = 
@@ -327,11 +329,33 @@ private fun injectOverlayDetectionScript(webView: WebView?) {
             // 초기 오버레이 검사
             detectAndHandleOverlays();
             
-            // 주기적 오버레이 검사 (로그인 후 나타나는 오버레이 대응)
-            let overlayCheckInterval = setInterval(detectAndHandleOverlays, 2000);
+            // ✅ 로그인 후 제한 시간만 감지 (10초)
+            const OVERLAY_DETECTION_DURATION = 10 * 1000; // 10초
+            let overlayCheckInterval;
+            let overlayObserver;
+            let detectionStartTime = Date.now();
             
-            // DOM 변화 감지로 새로운 오버레이 실시간 처리
-            const overlayObserver = new MutationObserver(function(mutations) {
+            function isDetectionActive() {
+                return (Date.now() - detectionStartTime) <= OVERLAY_DETECTION_DURATION;
+            }
+            
+            // 주기적 오버레이 검사 (로그인 후 1분간만)
+            overlayCheckInterval = setInterval(function() {
+                if (isDetectionActive()) {
+                    detectAndHandleOverlays();
+                } else {
+                    console.log('Overlay detection period ended (10 seconds)');
+                    clearInterval(overlayCheckInterval);
+                }
+            }, 2000);
+            
+            // DOM 변화 감지로 새로운 오버레이 실시간 처리 (1분간만)
+            overlayObserver = new MutationObserver(function(mutations) {
+                if (!isDetectionActive()) {
+                    console.log('Overlay detection disabled - user interaction period');
+                    return;
+                }
+                
                 let hasNewOverlay = false;
                 
                 mutations.forEach(function(mutation) {
@@ -351,7 +375,7 @@ private fun injectOverlayDetectionScript(webView: WebView?) {
                 });
                 
                 if (hasNewOverlay) {
-                    console.log('New overlay detected via DOM mutation');
+                    console.log('New overlay detected via DOM mutation (within detection period)');
                     setTimeout(detectAndHandleOverlays, 500);
                 }
             });
@@ -361,10 +385,22 @@ private fun injectOverlayDetectionScript(webView: WebView?) {
                 subtree: true
             });
             
+            // 10초 후 자동 감지 완전 중지
+            setTimeout(function() {
+                console.log('Auto-overlay detection fully disabled after 10 seconds');
+                if (overlayCheckInterval) {
+                    clearInterval(overlayCheckInterval);
+                }
+                if (overlayObserver) {
+                    overlayObserver.disconnect();
+                }
+                showOverlayNotification('오버레이 자동 감지가 종료되었습니다', 'info');
+            }, OVERLAY_DETECTION_DURATION);
+            
             // 페이지 전환 시 감지 중지
             window.addEventListener('beforeunload', function() {
-                clearInterval(overlayCheckInterval);
-                overlayObserver.disconnect();
+                if (overlayCheckInterval) clearInterval(overlayCheckInterval);
+                if (overlayObserver) overlayObserver.disconnect();
             });
             
             console.log('Instagram overlay detection and auto-handling initialized');
@@ -467,7 +503,14 @@ private fun injectDownloadButtonScript(webView: WebView?) {
                 const notification = document.createElement('div');
                 notification.innerHTML = message;
                 
-                const bgColor = type === 'error' ? 'rgba(244, 67, 54, 0.9)' : 'rgba(76, 175, 80, 0.9)';
+                let bgColor;
+                if (type === 'error') {
+                    bgColor = 'rgba(244, 67, 54, 0.9)';
+                } else if (type === 'info') {
+                    bgColor = 'rgba(33, 150, 243, 0.9)';
+                } else {
+                    bgColor = 'rgba(76, 175, 80, 0.9)';
+                }
                 
                 notification.style.cssText = 
                     'position: fixed;' +

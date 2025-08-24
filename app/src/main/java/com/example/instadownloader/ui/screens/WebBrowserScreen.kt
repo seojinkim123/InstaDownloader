@@ -68,7 +68,7 @@ class WebViewInterface(
             Log.e("WebView", "Error parsing media: ${e.message}")
         }
     }
-    
+
     @JavascriptInterface
     fun updateMediaList(mediaJson: String) {
         try {
@@ -80,21 +80,21 @@ class WebViewInterface(
             Log.e("WebView", "Error updating media: ${e.message}")
         }
     }
-    
+
     @JavascriptInterface
     fun notifyBlobProcessing(filename: String, status: String) {
         Handler(Looper.getMainLooper()).post {
             onBlobProcessing(filename, status)
         }
     }
-    
+
     @JavascriptInterface
     fun downloadBlobVideo(filename: String, base64Data: String) {
         Handler(Looper.getMainLooper()).post {
             onBlobDownload(filename, base64Data)
         }
     }
-    
+
     private fun parseMediaJson(json: String): List<InstagramMediaItem> {
         return json.split("||").mapNotNull { item ->
             val parts = item.split("::", limit = 2)
@@ -119,13 +119,13 @@ fun WebBrowserScreen() {
     var showBottomSheet by remember { mutableStateOf(false) }
     var mediaItems by remember { mutableStateOf<List<InstagramMediaItem>>(emptyList()) }
     var selectedItems by remember { mutableStateOf<List<InstagramMediaItem>>(emptyList()) }
-    
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val bottomSheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true
     )
-    
+
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -146,7 +146,7 @@ fun WebBrowserScreen() {
             ) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
             }
-            
+
             IconButton(
                 onClick = {
                     webView?.reload()
@@ -154,16 +154,16 @@ fun WebBrowserScreen() {
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = "새로고침")
             }
-            
+
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
                     strokeWidth = 2.dp
                 )
             }
-            
+
             Spacer(modifier = Modifier.weight(1f))
-            
+
             // 현재 URL 표시
             Text(
                 text = currentUrl.take(30) + if (currentUrl.length > 30) "..." else "",
@@ -171,9 +171,9 @@ fun WebBrowserScreen() {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        
+
         HorizontalDivider()
-        
+
         // 웹뷰
         AndroidView(
             factory = { context ->
@@ -186,66 +186,71 @@ fun WebBrowserScreen() {
                             currentUrl = url ?: ""
                             Log.d("WebView", "페이지 시작: $url")
                         }
-                        
+
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             isLoading = false
                             canGoBack = view?.canGoBack() ?: false
                             currentUrl = url ?: ""
                             Log.d("WebView", "페이지 완료: $url")
-                            
-                            // 로그인 페이지인 경우 스크립트 주입하지 않음
+
+                            // ✨ 추가된 부분 시작
+                            // "X" 닫기 버튼 자동 클릭 스크립트 주입 (모든 페이지에서 실행)
+                            view?.evaluateJavascript(getCloseButtonClickScript(), null)
+                            // ✨ 추가된 부분 끝
+
+                            // 로그인 페이지인 경우 스크립트 주입하지 않음 (기존 로직 유지)
                             if (url?.contains("accounts/login") == false) {
                                 // Instagram 포스트 감지 및 다운로드 버튼 추가 JavaScript 주입
                                 view?.evaluateJavascript(getInstagramScript(), null)
                             }
                         }
-                        
+
                         override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
                             // SSL 에러 무시 (개발용, 실제 배포시에는 주의)
                             handler?.proceed()
                             Log.w("WebView", "SSL 에러 무시: ${error?.toString()}")
                         }
-                        
+
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val url = request?.url?.toString()
                             val headers = request?.requestHeaders
                             Log.d("WebView", "🌐 URL 로딩: $url")
                             Log.d("WebView", "📨 요청 헤더: $headers")
-                            
-                            // Instagram 도메인만 허용
-                            if (url?.contains("instagram.com") == true || url?.contains("facebook.com") == true) {
-                                Log.d("WebView", "✅ 허용된 도메인: $url")
-                                return false // WebView에서 처리
-                            }
-                            
+
+//                            // Instagram 도메인만 허용
+//                            if (url?.contains("instagram.com") == true || url?.contains("facebook.com") == true) {
+//                                Log.d("WebView", "✅ 허용된 도메인: $url")
+//                                return false // WebView에서 처리
+//                            }
+//
                             Log.w("WebView", "❌ 차단된 도메인: $url")
                             return super.shouldOverrideUrlLoading(view, request)
                         }
-                        
+
                         override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                             super.onReceivedError(view, errorCode, description, failingUrl)
                             Log.e("WebView", "에러 발생: $description ($errorCode) - $failingUrl")
                         }
                     }
-                    
+
                     // Console 로그 처리
                     webChromeClient = object : WebChromeClient() {
                         override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                             Log.d("WebView", "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()}")
                             return true
                         }
-                        
+
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
                             super.onProgressChanged(view, newProgress)
                             Log.d("WebView", "📊 로딩 진행률: $newProgress%")
-                            
+
                             // 쿠키 상태 로깅 (50% 진행 시점에서)
                             if (newProgress == 50) {
                                 val cookieManager = CookieManager.getInstance()
                                 val hasCookie = cookieManager.hasCookies()
                                 Log.d("WebView", "🍪 쿠키 상태: $hasCookie")
-                                
+
                                 val url = view?.url
                                 if (url != null) {
                                     val cookies = cookieManager.getCookie(url)
@@ -254,7 +259,7 @@ fun WebBrowserScreen() {
                             }
                         }
                     }
-                    
+
                     // JavaScript 인터페이스 추가
                     addJavascriptInterface(
                         WebViewInterface(
@@ -285,7 +290,7 @@ fun WebBrowserScreen() {
                                     try {
                                         val mediaDownloader = MediaDownloader(context)
                                         val result = mediaDownloader.downloadBase64Video(filename, base64Data)
-                                        
+
                                         result.fold(
                                             onSuccess = { savedUri ->
                                                 Toast.makeText(context, "비디오 다운로드 완료: $filename", Toast.LENGTH_SHORT).show()
@@ -302,81 +307,88 @@ fun WebBrowserScreen() {
                         ),
                         "Android"
                     )
-                    
+
                     // 🔧 핵심 웹뷰 설정 (인스타그램 로그인 문제 해결)
                     settings.apply {
                         // JavaScript 활성화
                         javaScriptEnabled = true
                         javaScriptCanOpenWindowsAutomatically = true
-                        
+
                         // DOM Storage 활성화
                         domStorageEnabled = true
-                        
+
                         // 데이터베이스 활성화 (deprecated but still works)
                         @Suppress("DEPRECATION")
                         databaseEnabled = true
-                        
+
                         // 뷰포트 설정
                         loadWithOverviewMode = true
                         useWideViewPort = true
-                        
+
                         // 줌 설정
                         setSupportZoom(true)
                         builtInZoomControls = true
                         displayZoomControls = false
-                        
+
                         // Mixed Content 허용 (HTTPS + HTTP)
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        
+
                         // 🔧 중요: 최신 모바일 User-Agent 사용 (2025년 호환성)
-                        userAgentString = "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                        
+//                        userAgentString = "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                        // ✅ Instagram 웹뷰 차단 우회 (wv 토큰 완전 제거)
+                        val defaultUA = WebSettings.getDefaultUserAgent(context)
+                        userAgentString = defaultUA
+                            .replace("; wv", "") // WebView 토큰 제거
+                            .replace("Version/4.0", "Version/4.0 Chrome/131.0.0.0") // 브라우저 시그니처 강화
+
+
+
                         // 🔧 최적화된 캐시 모드 설정 (인스타그램용)
                         cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
-                        
+
                         // 🔧 보안 강화된 파일 접근 설정
                         allowFileAccess = false  // 보안상 false로 변경
                         allowContentAccess = true
-                        
+
                         // Deprecated 보안 설정 (여전히 필요)
                         @Suppress("DEPRECATION")
                         allowUniversalAccessFromFileURLs = false  // XSS 공격 방지
                         @Suppress("DEPRECATION")
                         allowFileAccessFromFileURLs = false  // 파일 접근 제한
-                        
+
                         // Geolocation 허용
                         setGeolocationEnabled(true)
-                        
+
                         // 미디어 재생 설정
                         mediaPlaybackRequiresUserGesture = false
-                        
+
                         // 안전하지 않은 콘텐츠 허용
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             safeBrowsingEnabled = false
                         }
                     }
-                    
+
                     // 🔧 강화된 쿠키 관리자 설정 (로그인 세션 유지)
                     val cookieManager = CookieManager.getInstance()
-                    
+
                     // 🔧 쿠키 설정 (현재 minSdk가 24이므로 항상 최신 API 사용)
                     cookieManager.setAcceptCookie(true)
                     cookieManager.setAcceptThirdPartyCookies(this, true)
                     Log.d("WebView", "✅ 쿠키 설정 완료")
-                    
+
                     // 쿠키 즉시 동기화
                     cookieManager.flush()
                     Log.d("WebView", "🔄 쿠키 동기화 완료")
-                    
+
                     // 파일 스키마 쿠키 허용 (deprecated but still needed)
                     @Suppress("DEPRECATION")
                     CookieManager.setAcceptFileSchemeCookies(true)
-                    
+
                     Log.d("WebView", "🍪 쿠키 매니저 설정 완료")
-                    
+
                     // 🔧 하드웨어 가속 활성화
                     setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
-                    
+
                     // Instagram 로드
                     loadUrl("https://www.instagram.com")
                     webView = this
@@ -385,12 +397,12 @@ fun WebBrowserScreen() {
             modifier = Modifier.fillMaxSize()
         )
     }
-    
+
     // 바텀 시트
     if (showBottomSheet) {
         ModalBottomSheet(
-            onDismissRequest = { 
-                showBottomSheet = false 
+            onDismissRequest = {
+                showBottomSheet = false
             },
             sheetState = bottomSheetState,
             modifier = Modifier.fillMaxHeight()
@@ -405,7 +417,7 @@ fun WebBrowserScreen() {
                             val mediaDownloader = MediaDownloader(context)
                             val urls = selectedUrls.map { it.url }
                             val isVideoList = selectedUrls.map { it.type == "video" }
-                            
+
                             val result = mediaDownloader.downloadMediaList(
                                 mediaUrls = urls,
                                 isVideoList = isVideoList,
@@ -416,7 +428,7 @@ fun WebBrowserScreen() {
                                     // 개별 완료 처리
                                 }
                             )
-                            
+
                             result.fold(
                                 onSuccess = { savedUris ->
                                     Toast.makeText(context, "다운로드 완료: ${savedUris.size}개 파일", Toast.LENGTH_SHORT).show()
@@ -425,7 +437,7 @@ fun WebBrowserScreen() {
                                     Toast.makeText(context, "다운로드 실패: ${error.message}", Toast.LENGTH_SHORT).show()
                                 }
                             )
-                            
+
                             showBottomSheet = false
                         } catch (e: Exception) {
                             Toast.makeText(context, "오류: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -437,8 +449,95 @@ fun WebBrowserScreen() {
     }
 }
 
+// ✨ 추가된 부분 시작
+// 'X' 닫기 버튼 자동 클릭 스크립트
+private fun getCloseButtonClickScript(): String {
+    return """
+        (function() {
+            // 스크립트가 여러 번 실행되는 것을 방지
+            if (window.closeModalObserver) {
+                return;
+            }
+            console.log('모달 닫기 버튼 감지 스크립트 시작');
 
-// Instagram 스크립트를 별도 함수로 분리
+            const clickCloseButton = (modal) => {
+                // 닫기 버튼을 찾기 위한 다양한 CSS 선택자
+                const selectors = [
+                    'button[aria-label="Close"]',    // 영어 "Close"
+                    'button[aria-label="닫기"]',      // 한국어 "닫기"
+                    'div[role="button"][aria-label="Close"]',
+                    'div[role="button"][aria-label="닫기"]',
+                    'svg[aria-label="닫기"]',
+                    'svg[aria-label="Close"]'
+                ];
+
+                for (const selector of selectors) {
+                    const closeButton = modal.querySelector(selector);
+                    if (closeButton) {
+                        console.log('닫기 버튼 발견!', closeButton);
+                        // 클릭 가능한 가장 가까운 부모 요소를 찾아 클릭 (더 안정적)
+                        const clickableElement = closeButton.closest('div[role="button"], button');
+                        if (clickableElement) {
+                            clickableElement.click();
+                        } else {
+                            closeButton.click();
+                        }
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            const observerCallback = (mutationsList, observer) => {
+                for(const mutation of mutationsList) {
+                    if (mutation.type === 'childList') {
+                        // 페이지에 새로 추가된 노드들을 확인
+                        mutation.addedNodes.forEach(node => {
+                            // 추가된 노드가 Element가 아니면 무시
+                            if (node.nodeType !== 1) return;
+
+                            // role="dialog"를 가진 모달을 직접 찾거나 자식 중에 있는지 확인
+                            const dialog = node.querySelector ? (node.matches('div[role="dialog"]') ? node : node.querySelector('div[role="dialog"]')) : null;
+                            
+                            if (dialog) {
+                                console.log('role="dialog" 모달 발견');
+                                if (clickCloseButton(dialog)) {
+                                     console.log('닫기 버튼 클릭 성공. 관찰을 중단합니다.');
+                                     observer.disconnect(); // 목표 달성 후 observer 중지
+                                     window.closeModalObserver = null;
+                                }
+                            }
+                        });
+                    }
+                }
+            };
+            
+            // DOM의 변화를 감지하는 MutationObserver 생성
+            const observer = new MutationObserver(observerCallback);
+
+            // body 전체의 자식 요소 추가/삭제를 감시
+            observer.observe(document.body, { childList: true, subtree: true });
+
+            // window 객체에 observer를 저장하여 중복 실행 방지
+            window.closeModalObserver = observer;
+
+            console.log('이제부터 모달 및 닫기 버튼을 감시합니다.');
+            
+            // 안전장치: 30초 후에 자동으로 감시 중지
+            setTimeout(() => {
+                if (window.closeModalObserver) {
+                    console.log('시간 초과. 모달 감시를 중지합니다.');
+                    window.closeModalObserver.disconnect();
+                    window.closeModalObserver = null;
+                }
+            }, 30000); // 30초
+        })();
+    """.trimIndent()
+}
+// ✨ 추가된 부분 끝
+
+
+// Instagram 스크립트를 별도 함수로 분리 (기존 코드 원본 유지)
 private fun getInstagramScript(): String {
     return """
         (function() {
@@ -752,7 +851,7 @@ fun InstagramMediaBottomSheet(
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(bottom = 16.dp)
         )
-        
+
         // Unselect All 버튼
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -766,7 +865,7 @@ fun InstagramMediaBottomSheet(
                 Text("전체 해제")
             }
         }
-        
+
         // 미디어 그리드
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
@@ -778,7 +877,7 @@ fun InstagramMediaBottomSheet(
             items(mediaItems.size) { index ->
                 val item = mediaItems[index]
                 val isSelected = selectedItems.any { it.url == item.url && it.isSelected }
-                
+
                 Box(
                     modifier = Modifier
                         .aspectRatio(1f)
@@ -828,7 +927,7 @@ fun InstagramMediaBottomSheet(
                             contentScale = ContentScale.Crop
                         )
                     }
-                    
+
                     // 선택 체크박스 (우상단)
                     if (isSelected) {
                         Box(
@@ -850,7 +949,7 @@ fun InstagramMediaBottomSheet(
                             )
                         }
                     }
-                    
+
                     // 비디오 표시 (좌하단)
                     if (item.type == "video") {
                         Box(
@@ -873,9 +972,9 @@ fun InstagramMediaBottomSheet(
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // 다운로드 버튼
         Button(
             onClick = {
@@ -889,7 +988,7 @@ fun InstagramMediaBottomSheet(
         ) {
             Text("다운로드 (${selectedItems.count { it.isSelected }}개)")
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
     }
 }

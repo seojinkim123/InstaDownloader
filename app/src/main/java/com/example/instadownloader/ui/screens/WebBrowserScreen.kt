@@ -294,30 +294,87 @@ fun WebBrowserScreen() {
                     )
 
                     settings.apply {
+
                         javaScriptEnabled = true
-                        javaScriptCanOpenWindowsAutomatically = true
+
                         domStorageEnabled = true
+
                         @Suppress("DEPRECATION")
+
                         databaseEnabled = true
-                        loadWithOverviewMode = true
-                        useWideViewPort = true
-                        setSupportZoom(true)
-                        builtInZoomControls = true
-                        displayZoomControls = false
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        userAgentString = "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                        cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+
+                        cacheMode = WebSettings.LOAD_DEFAULT
+
+
+
+// ✅ 팝업/새창 허용 (회색 오버레이 원인 해소)
+
+                        setSupportMultipleWindows(true)
+
+                        javaScriptCanOpenWindowsAutomatically = true
+
+
+
+// ✅ Instagram 웹뷰 차단 우회 (wv 토큰 완전 제거)
+
+                        val defaultUA = WebSettings.getDefaultUserAgent(context)
+
+                        userAgentString = defaultUA
+
+                            .replace("; wv", "") // WebView 토큰 제거
+
+                            .replace("Version/4.0", "Version/4.0 Chrome/131.0.0.0") // 브라우저 시그니처 강화
+
+
+
+// ✅ 파일 및 콘텐츠 접근 (Android 13+ 쿠키 처리에 중요)
+
                         allowFileAccess = false
+
                         allowContentAccess = true
+
                         @Suppress("DEPRECATION")
-                        allowUniversalAccessFromFileURLs = false
-                        @Suppress("DEPRECATION")
+
                         allowFileAccessFromFileURLs = false
-                        setGeolocationEnabled(true)
+
+                        @Suppress("DEPRECATION")
+
+                        allowUniversalAccessFromFileURLs = false
+
+
+
+// 미디어 자동재생 허용
+
                         mediaPlaybackRequiresUserGesture = false
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            safeBrowsingEnabled = false
-                        }
+
+
+
+// 모바일 반응형 뷰포트 설정
+
+                        loadWithOverviewMode = false
+
+                        useWideViewPort = true
+
+                        setSupportZoom(true)
+
+                        builtInZoomControls = false
+
+                        displayZoomControls = false
+
+
+
+// 보안 설정 (권장: 혼합콘텐츠 금지)
+
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+
+
+
+// 모바일 최적화
+
+                        layoutAlgorithm = WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+
+                        textZoom = 100
+
                     }
 
                     val cookieManager = CookieManager.getInstance()

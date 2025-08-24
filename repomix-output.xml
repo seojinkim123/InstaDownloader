@@ -1,0 +1,3185 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.claude/
+  settings.local.json
+app/
+  src/
+    main/
+      java/
+        com/
+          example/
+            instadownloader/
+              data/
+                database/
+                  AppDatabase.kt
+                  DownloadedMediaDao.kt
+                  DownloadedMediaEntity.kt
+                download/
+                  MediaDownloader.kt
+                model/
+                  InstagramMedia.kt
+                repository/
+                  GalleryRepository.kt
+              ui/
+                screens/
+                  GalleryScreen.kt
+                  UrlDownloaderScreen.kt
+                  WebBrowserScreen.kt
+                theme/
+                  Color.kt
+                  Theme.kt
+                  Type.kt
+              utils/
+                ToastUtils.kt
+              InstagramScraper.kt
+              MainActivity.kt
+      res/
+        drawable/
+          ic_launcher_background.xml
+          ic_launcher_foreground.xml
+        mipmap-anydpi-v26/
+          ic_launcher_round.xml
+          ic_launcher.xml
+        values/
+          colors.xml
+          strings.xml
+          themes.xml
+        xml/
+          backup_rules.xml
+          data_extraction_rules.xml
+      AndroidManifest.xml
+  .gitignore
+  build.gradle.kts
+  CLAUDE.md
+  proguard-rules.pro
+gradle/
+  wrapper/
+    gradle-wrapper.properties
+  libs.versions.toml
+.gitignore
+build.gradle.kts
+gradle.properties
+gradlew
+gradlew.bat
+settings.gradle.kts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".claude/settings.local.json">
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(./gradlew:*)"
+    ],
+    "deny": []
+  }
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/data/database/AppDatabase.kt">
+package com.example.instadownloader.data.database
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+
+@Database(
+    entities = [DownloadedMediaEntity::class],
+    version = 1,
+    exportSchema = false
+)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun downloadedMediaDao(): DownloadedMediaDao
+    
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+        
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "insta_downloader_database"
+                ).build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/data/database/DownloadedMediaDao.kt">
+package com.example.instadownloader.data.database
+
+import androidx.room.*
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface DownloadedMediaDao {
+    @Query("SELECT * FROM downloaded_media ORDER BY downloadDate DESC")
+    fun getAllMediaFlow(): Flow<List<DownloadedMediaEntity>>
+    
+    @Query("SELECT * FROM downloaded_media ORDER BY downloadDate DESC")
+    suspend fun getAllMedia(): List<DownloadedMediaEntity>
+    
+    @Query("SELECT * FROM downloaded_media WHERE mediaType = :type ORDER BY downloadDate DESC")
+    suspend fun getMediaByType(type: String): List<DownloadedMediaEntity>
+    
+    @Query("SELECT * FROM downloaded_media WHERE id = :id")
+    suspend fun getMediaById(id: String): DownloadedMediaEntity?
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMedia(media: DownloadedMediaEntity)
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMediaList(mediaList: List<DownloadedMediaEntity>)
+    
+    @Delete
+    suspend fun deleteMedia(media: DownloadedMediaEntity)
+    
+    @Query("DELETE FROM downloaded_media WHERE id = :id")
+    suspend fun deleteMediaById(id: String)
+    
+    @Query("DELETE FROM downloaded_media")
+    suspend fun deleteAllMedia()
+    
+    @Query("SELECT COUNT(*) FROM downloaded_media")
+    suspend fun getMediaCount(): Int
+    
+    @Query("SELECT COUNT(*) FROM downloaded_media WHERE mediaType = :type")
+    suspend fun getMediaCountByType(type: String): Int
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/data/database/DownloadedMediaEntity.kt">
+package com.example.instadownloader.data.database
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "downloaded_media")
+data class DownloadedMediaEntity(
+    @PrimaryKey val id: String,
+    val fileName: String,
+    val filePath: String, // MediaStore Uri
+    val originalUrl: String,
+    val downloadDate: Long,
+    val mediaType: String, // "image" or "video"
+    val fileSize: Long,
+    val thumbnailPath: String? = null
+)
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/data/model/InstagramMedia.kt">
+package com.example.instadownloader.data.model
+
+data class MediaItem(
+    val url: String,
+    val type: MediaType,
+    val thumbnail: String? = null
+)
+
+enum class MediaType {
+    IMAGE, VIDEO
+}
+
+fun String.getMediaType(): MediaType {
+    return when {
+        this.contains(".mp4") || this.contains("video") -> MediaType.VIDEO
+        else -> MediaType.IMAGE
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/data/repository/GalleryRepository.kt">
+package com.example.instadownloader.data.repository
+
+import android.content.Context
+import android.net.Uri
+import com.example.instadownloader.data.database.AppDatabase
+import com.example.instadownloader.data.database.DownloadedMediaEntity
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+data class GalleryMediaItem(
+    val id: String,
+    val fileName: String,
+    val uri: Uri,
+    val originalUrl: String,
+    val downloadDate: Long,
+    val mediaType: String,
+    val fileSize: Long,
+    val thumbnailUri: Uri
+)
+
+class GalleryRepository(context: Context) {
+    private val database = AppDatabase.getDatabase(context)
+    private val mediaDao = database.downloadedMediaDao()
+    
+    fun getAllMediaFlow(): Flow<List<GalleryMediaItem>> {
+        return mediaDao.getAllMediaFlow().map { entities ->
+            entities.map { entity ->
+                entity.toGalleryMediaItem()
+            }
+        }
+    }
+    
+    suspend fun getAllMedia(): List<GalleryMediaItem> {
+        return mediaDao.getAllMedia().map { entity ->
+            entity.toGalleryMediaItem()
+        }
+    }
+    
+    suspend fun getMediaByType(type: String): List<GalleryMediaItem> {
+        return mediaDao.getMediaByType(type).map { entity ->
+            entity.toGalleryMediaItem()
+        }
+    }
+    
+    suspend fun deleteMedia(mediaItem: GalleryMediaItem) {
+        mediaDao.deleteMediaById(mediaItem.id)
+    }
+    
+    suspend fun getMediaCount(): Int {
+        return mediaDao.getMediaCount()
+    }
+    
+    suspend fun getMediaCountByType(type: String): Int {
+        return mediaDao.getMediaCountByType(type)
+    }
+    
+    private fun DownloadedMediaEntity.toGalleryMediaItem(): GalleryMediaItem {
+        return GalleryMediaItem(
+            id = this.id,
+            fileName = this.fileName,
+            uri = Uri.parse(this.filePath),
+            originalUrl = this.originalUrl,
+            downloadDate = this.downloadDate,
+            mediaType = this.mediaType,
+            fileSize = this.fileSize,
+            thumbnailUri = Uri.parse(this.thumbnailPath ?: this.filePath)
+        )
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/ui/screens/GalleryScreen.kt">
+package com.example.instadownloader.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
+import com.example.instadownloader.data.repository.GalleryRepository
+import com.example.instadownloader.data.repository.GalleryMediaItem
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GalleryScreen() {
+    var showFilter by remember { mutableStateOf(false) }
+    var selectedFilter by remember { mutableStateOf("전체") }
+    var mediaItems by remember { mutableStateOf<List<GalleryMediaItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var selectedMedia by remember { mutableStateOf<GalleryMediaItem?>(null) }
+    
+    val context = LocalContext.current
+    val repository = remember { GalleryRepository(context) }
+    val coroutineScope = rememberCoroutineScope()
+    
+    // 데이터 로드
+    LaunchedEffect(selectedFilter) {
+        isLoading = true
+        mediaItems = when (selectedFilter) {
+            "이미지" -> repository.getMediaByType("image")
+            "동영상" -> repository.getMediaByType("video")
+            else -> repository.getAllMedia()
+        }
+        isLoading = false
+    }
+    
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // 상단 헤더
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "다운로드 갤러리",
+                style = MaterialTheme.typography.headlineMedium
+            )
+            
+            IconButton(
+                onClick = { showFilter = true }
+            ) {
+                Icon(Icons.Default.MoreVert, contentDescription = "필터")
+            }
+        }
+        
+        // 미디어 개수 표시
+        Text(
+            text = "총 ${mediaItems.size}개 항목",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        if (isLoading) {
+            // 로딩 상태
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        } else if (mediaItems.isEmpty()) {
+            // 빈 상태
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "다운로드한 미디어가 없습니다",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "URL 다운로더나 브라우저에서 미디어를 다운로드해보세요",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        } else {
+            // 미디어 그리드
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(mediaItems) { media ->
+                    GalleryMediaCard(
+                        media = media,
+                        onClick = {
+                            selectedMedia = media
+                        },
+                        onDelete = {
+                            coroutineScope.launch {
+                                repository.deleteMedia(media)
+                                // 삭제 후 목록 새로고침
+                                mediaItems = when (selectedFilter) {
+                                    "이미지" -> repository.getMediaByType("image")
+                                    "동영상" -> repository.getMediaByType("video")
+                                    else -> repository.getAllMedia()
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+    
+    // 필터 다이얼로그
+    if (showFilter) {
+        AlertDialog(
+            onDismissRequest = { showFilter = false },
+            title = { Text("필터 선택") },
+            text = {
+                Column {
+                    listOf("전체", "이미지", "동영상").forEach { filter ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedFilter == filter,
+                                onClick = { selectedFilter = filter }
+                            )
+                            Text(
+                                text = filter,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showFilter = false }
+                ) {
+                    Text("적용")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showFilter = false }
+                ) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+    
+    // 미디어 상세 보기 다이얼로그
+    selectedMedia?.let { media ->
+        Dialog(
+            onDismissRequest = { selectedMedia = null }
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    AsyncImage(
+                        model = media.uri,
+                        contentDescription = media.fileName,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Text(
+                        text = media.fileName,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    
+                    Text(
+                        text = if (media.mediaType == "video") "동영상" else "이미지",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Row(
+                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextButton(
+                            onClick = { selectedMedia = null }
+                        ) {
+                            Text("닫기")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GalleryMediaCard(
+    media: GalleryMediaItem,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .aspectRatio(1f)
+            .fillMaxWidth()
+    ) {
+        Box {
+            AsyncImage(
+                model = media.thumbnailUri,
+                contentDescription = media.fileName,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
+            // 비디오 표시 오버레이
+            if (media.mediaType == "video") {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(4.dp),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                ) {
+                    Text(
+                        text = "동영상",
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+            
+            // 삭제 버튼
+            IconButton(
+                onClick = { showDeleteDialog = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+            ) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "삭제",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .background(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                            MaterialTheme.shapes.small
+                        )
+                        .padding(2.dp)
+                )
+            }
+        }
+    }
+    
+    // 삭제 확인 다이얼로그
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("미디어 삭제") },
+            text = { Text("이 미디어를 삭제하시겠습니까?\n갤러리에서도 함께 삭제됩니다.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDelete()
+                    }
+                ) {
+                    Text("삭제")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteDialog = false }
+                ) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/ui/screens/UrlDownloaderScreen.kt">
+package com.example.instadownloader.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.instadownloader.InstagramScraper
+import com.example.instadownloader.data.download.MediaDownloader
+import com.example.instadownloader.data.model.MediaItem
+import com.example.instadownloader.data.model.MediaType
+import com.example.instadownloader.data.model.getMediaType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.example.instadownloader.utils.ToastUtils
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UrlDownloaderScreen() {
+    var urlText by remember { mutableStateOf("") }
+    var mediaItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showMediaDialog by remember { mutableStateOf(false) }
+    var selectedMediaItems by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0) }
+    
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val downloader = remember { MediaDownloader(context) }
+    val coroutineScope = rememberCoroutineScope()
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // 헤더
+        Text(
+            text = "Instagram URL 다운로더",
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        OutlinedTextField(
+            value = urlText,
+            onValueChange = { urlText = it },
+            label = { Text("Instagram URL을 입력하세요") },
+            placeholder = { Text("https://www.instagram.com/p/...") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Done
+            ),
+            singleLine = true,
+            trailingIcon = {
+                IconButton(
+                    onClick = {
+                        val clipText = clipboardManager.getText()?.text
+                        if (!clipText.isNullOrBlank()) {
+                            urlText = clipText
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "붙여넣기")
+                }
+            }
+        )
+        
+        Button(
+            onClick = {
+                if (urlText.isNotBlank()) {
+                    coroutineScope.launch {
+                        isLoading = true
+                        errorMessage = null
+                        mediaItems = emptyList()
+                        
+                        try {
+                            // URL에서 포스트 ID 추출
+                            val postId = extractPostIdFromUrl(urlText)
+                            println("Extracted Post ID: $postId from URL: $urlText")
+                            if (postId != null) {
+                                val urls = withContext(Dispatchers.IO) {
+                                    InstagramScraper.scrapePostMedia(postId, "high")
+                                }
+                                
+                                // URL 리스트를 MediaItem 리스트로 변환
+                                val items: List<MediaItem> = urls.mapIndexed { index: Int, url: String ->
+                                    MediaItem(
+                                        url = url,
+                                        type = url.getMediaType(),
+                                        thumbnail = url
+                                    )
+                                }
+                                
+                                withContext(Dispatchers.Main) {
+                                    mediaItems = items
+                                    selectedMediaItems = emptySet()
+                                    isLoading = false
+                                    if (items.isNotEmpty()) {
+                                        showMediaDialog = true
+                                    }
+                                }
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    errorMessage = "올바른 Instagram URL을 입력해주세요"
+                                    isLoading = false
+                                }
+                            }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                errorMessage = e.message ?: "미디어 추출 중 오류가 발생했습니다"
+                                isLoading = false
+                            }
+                        }
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            enabled = urlText.isNotBlank() && !isLoading
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(if (isLoading) "추출 중..." else "미디어 추출")
+        }
+        
+        // 에러 메시지 표시
+        errorMessage?.let { error ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Text(
+                    text = "오류: $error",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
+        
+        // 빈 상태 표시
+        if (!isLoading && urlText.isBlank()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Instagram URL을 입력하고 미디어 추출을 눌러주세요",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+    
+    // 미디어 선택 다이얼로그
+    if (showMediaDialog) {
+        MediaSelectionDialog(
+            mediaItems = mediaItems,
+            selectedItems = selectedMediaItems,
+            isDownloading = isDownloading,
+            downloadProgress = downloadProgress,
+            onSelectionChange = { index, isSelected ->
+                selectedMediaItems = if (isSelected) {
+                    selectedMediaItems + index
+                } else {
+                    selectedMediaItems - index
+                }
+            },
+            onConfirm = {
+                coroutineScope.launch {
+                    isDownloading = true
+                    downloadProgress = 0
+                    
+                    val selectedItems = selectedMediaItems.map { index ->
+                        mediaItems[index]
+                    }
+                    
+                    val urls = selectedItems.map { it.url }
+                    val isVideoList = selectedItems.map { it.type == MediaType.VIDEO }
+                    val originalUrls = List(selectedItems.size) { urlText } // 모든 미디어의 원본 Instagram URL
+                    
+                    downloader.downloadMediaList(
+                        urls,
+                        isVideoList,
+                        originalUrls,
+                        onProgress = { current, _ ->
+                            downloadProgress = current
+                        }
+                    ).fold(
+                        onSuccess = { savedUris ->
+                            isDownloading = false
+                            showMediaDialog = false
+                            ToastUtils.showDownloadComplete(context, savedUris.size)
+                        },
+                        onFailure = { error ->
+                            isDownloading = false
+                            ToastUtils.showDownloadError(context, error.message ?: "알 수 없는 오류")
+                        }
+                    )
+                }
+            },
+            onDismiss = {
+                showMediaDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun MediaSelectionDialog(
+    mediaItems: List<MediaItem>,
+    selectedItems: Set<Int>,
+    isDownloading: Boolean,
+    downloadProgress: Int,
+    onSelectionChange: (Int, Boolean) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("다운로드할 미디어를 선택하세요 (${selectedItems.size}/${mediaItems.size})")
+                
+                if (isDownloading) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = downloadProgress / 100f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = "다운로드 중... $downloadProgress%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        },
+        text = {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.height(400.dp)
+            ) {
+                itemsIndexed(mediaItems) { index, mediaItem ->
+                    MediaSelectableCard(
+                        mediaItem = mediaItem,
+                        isSelected = selectedItems.contains(index),
+                        enabled = !isDownloading,
+                        onSelectionChange = { isSelected ->
+                            if (!isDownloading) {
+                                onSelectionChange(index, isSelected)
+                            }
+                        }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = selectedItems.isNotEmpty() && !isDownloading
+            ) {
+                if (isDownloading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("다운로드 (${selectedItems.size})")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isDownloading
+            ) {
+                Text("취소")
+            }
+        }
+    )
+}
+
+@Composable
+private fun MediaSelectableCard(
+    mediaItem: MediaItem,
+    isSelected: Boolean,
+    enabled: Boolean = true,
+    onSelectionChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .toggleable(
+                value = isSelected,
+                enabled = enabled,
+                onValueChange = onSelectionChange
+            ),
+        colors = if (isSelected) {
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        } else {
+            CardDefaults.cardColors()
+        }
+    ) {
+        Box {
+            AsyncImage(
+                model = mediaItem.thumbnail ?: mediaItem.url,
+                contentDescription = "미디어",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
+            // 체크박스
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = onSelectionChange,
+                enabled = enabled,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp),
+                colors = CheckboxDefaults.colors(
+                    checkedColor = MaterialTheme.colorScheme.primary,
+                    uncheckedColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+            
+            // 미디어 타입 표시
+            if (mediaItem.type == MediaType.VIDEO) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                ) {
+                    Text(
+                        text = "동영상",
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun extractPostIdFromUrl(url: String): String? {
+    // Instagram URL 패턴들:
+    // https://www.instagram.com/p/POST_ID/
+    // https://instagram.com/p/POST_ID/
+    // https://www.instagram.com/reel/POST_ID/
+    // https://instagram.com/reel/POST_ID/
+    // URL에 ?img_index=1 같은 쿼리 파라미터가 있을 수 있음
+    
+    val patterns = listOf(
+        Regex("instagram\\.com/p/([A-Za-z0-9_-]+)"),
+        Regex("instagram\\.com/reel/([A-Za-z0-9_-]+)")
+    )
+    
+    for (pattern in patterns) {
+        val match = pattern.find(url)
+        if (match != null) {
+            return match.groupValues[1]
+        }
+    }
+    
+    return null
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/ui/theme/Color.kt">
+package com.example.instadownloader.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+val Purple80 = Color(0xFFD0BCFF)
+val PurpleGrey80 = Color(0xFFCCC2DC)
+val Pink80 = Color(0xFFEFB8C8)
+
+val Purple40 = Color(0xFF6650a4)
+val PurpleGrey40 = Color(0xFF625b71)
+val Pink40 = Color(0xFF7D5260)
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/ui/theme/Theme.kt">
+package com.example.instadownloader.ui.theme
+
+import android.app.Activity
+import android.os.Build
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
+
+private val DarkColorScheme = darkColorScheme(
+    primary = Purple80,
+    secondary = PurpleGrey80,
+    tertiary = Pink80
+)
+
+private val LightColorScheme = lightColorScheme(
+    primary = Purple40,
+    secondary = PurpleGrey40,
+    tertiary = Pink40
+
+    /* Other default colors to override
+    background = Color(0xFFFFFBFE),
+    surface = Color(0xFFFFFBFE),
+    onPrimary = Color.White,
+    onSecondary = Color.White,
+    onTertiary = Color.White,
+    onBackground = Color(0xFF1C1B1F),
+    onSurface = Color(0xFF1C1B1F),
+    */
+)
+
+@Composable
+fun InstaDownloaderTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    // Dynamic color is available on Android 12+
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
+
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = Typography,
+        content = content
+    )
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/ui/theme/Type.kt">
+package com.example.instadownloader.ui.theme
+
+import androidx.compose.material3.Typography
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+
+// Set of Material typography styles to start with
+val Typography = Typography(
+    bodyLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.5.sp
+    )
+    /* Other default text styles to override
+    titleLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        letterSpacing = 0.sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.5.sp
+    )
+    */
+)
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/utils/ToastUtils.kt">
+package com.example.instadownloader.utils
+
+import android.content.Context
+import android.widget.Toast
+
+object ToastUtils {
+    fun showShort(context: Context, message: String) {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+    
+    fun showLong(context: Context, message: String) {
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+    
+    fun showDownloadComplete(context: Context, count: Int) {
+        val message = if (count == 1) {
+            "미디어 1개가 갤러리에 저장되었습니다"
+        } else {
+            "미디어 ${count}개가 갤러리에 저장되었습니다"
+        }
+        showLong(context, message)
+    }
+    
+    fun showDownloadError(context: Context, error: String) {
+        showLong(context, "다운로드 실패: $error")
+    }
+}
+</file>
+
+<file path="app/src/main/res/drawable/ic_launcher_background.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#3DDC84"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M9,0L9,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,0L19,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,0L29,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39,0L39,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M49,0L49,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,0L59,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M69,0L69,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M79,0L79,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M89,0L89,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M99,0L99,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,9L108,9"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,19L108,19"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,29L108,29"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,39L108,39"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,49L108,49"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,59L108,59"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,69L108,69"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,79L108,79"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,89L108,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,99L108,99"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,29L89,29"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,39L89,39"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,49L89,49"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,59L89,59"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,69L89,69"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,79L89,79"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,19L29,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39,19L39,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M49,19L49,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,19L59,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M69,19L69,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M79,19L79,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+</vector>
+</file>
+
+<file path="app/src/main/res/drawable/ic_launcher_foreground.xml">
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="85.84757"
+                android:endY="92.4963"
+                android:startX="42.9492"
+                android:startY="49.59793"
+                android:type="linear">
+                <item
+                    android:color="#44000000"
+                    android:offset="0.0" />
+                <item
+                    android:color="#00000000"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="nonZero"
+        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
+        android:strokeWidth="1"
+        android:strokeColor="#00000000" />
+</vector>
+</file>
+
+<file path="app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+</file>
+
+<file path="app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+</file>
+
+<file path="app/src/main/res/values/colors.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
+</file>
+
+<file path="app/src/main/res/values/strings.xml">
+<resources>
+    <string name="app_name">InstaDownloader</string>
+</resources>
+</file>
+
+<file path="app/src/main/res/values/themes.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.InstaDownloader" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
+</file>
+
+<file path="app/src/main/res/xml/backup_rules.xml">
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample backup rules file; uncomment and customize as necessary.
+   See https://developer.android.com/guide/topics/data/autobackup
+   for details.
+   Note: This file is ignored for devices older than API 31
+   See https://developer.android.com/about/versions/12/backup-restore
+-->
+<full-backup-content>
+    <!--
+   <include domain="sharedpref" path="."/>
+   <exclude domain="sharedpref" path="device.xml"/>
+-->
+</full-backup-content>
+</file>
+
+<file path="app/src/main/res/xml/data_extraction_rules.xml">
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample data extraction rules file; uncomment and customize as necessary.
+   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   for details.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- TODO: Use <include> and <exclude> to control what is backed up.
+        <include .../>
+        <exclude .../>
+        -->
+    </cloud-backup>
+    <!--
+    <device-transfer>
+        <include .../>
+        <exclude .../>
+    </device-transfer>
+    -->
+</data-extraction-rules>
+</file>
+
+<file path="app/src/main/AndroidManifest.xml">
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 인터넷 접근 권한 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    
+    <!-- 갤러리 읽기 권한 (API 레벨별 분기) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    
+    <!-- 파일 쓰기 권한 (API 29 미만) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28"
+        tools:ignore="ScopedStorage" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.InstaDownloader"
+        android:usesCleartextTraffic="true"
+        android:requestLegacyExternalStorage="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.InstaDownloader">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
+</file>
+
+<file path="app/.gitignore">
+/build
+</file>
+
+<file path="app/build.gradle.kts">
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+}
+
+android {
+    namespace = "com.example.instadownloader"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.example.instadownloader"
+        minSdk = 24
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+    buildFeatures {
+        compose = true
+    }
+}
+
+dependencies {
+    // Core Android
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.activity.compose)
+    
+    // Compose
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.navigation.compose)
+    implementation("androidx.compose.foundation:foundation:1.5.4")
+    
+    // Room Database
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+    
+    // Networking (OkHttp for InstagramScraper)
+    implementation(libs.okhttp)
+    
+    // Image Loading
+    implementation(libs.glide)
+    implementation(libs.coil.compose)
+    
+    // Testing
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+    debugImplementation(libs.androidx.ui.tooling)
+    debugImplementation(libs.androidx.ui.test.manifest)
+}
+</file>
+
+<file path="app/CLAUDE.md">
+# Instagram Downloader App - Product Requirements Document (PRD)
+
+## 1. 개요
+
+### 1.1 제품 비전
+인스타그램 게시물(이미지, 비디오)을 쉽고 빠르게 다운로드할 수 있는 안드로이드 애플리케이션
+
+### 1.2 목표
+- 공개/비공개 인스타그램 게시물 다운로드 지원
+- 직관적이고 사용하기 쉬운 UI 제공
+- 다운로드한 미디어의 체계적 관리
+
+## 2. 핵심 기능
+
+### 2.1 Tab 1: URL 다운로더
+**기능 설명**: 인스타그램 게시물 URL을 통한 다운로드
+
+**주요 기능**:
+- URL 입력 필드 (붙여넣기 지원)
+- 서버 API 연동을 통한 미디어 URL 추출
+- 미디어 프리뷰 (이미지/비디오)
+- 개별 또는 일괄 다운로드
+- 다운로드 진행률 표시
+
+**API 연동**:
+```
+GET /api/extract?url={instagram_post_url}
+Response: {
+  "url": [
+    "https://scontent-ssn1-1.cdninstagram.com/...",
+    "https://scontent-ssn1-1.cdninstagram.com/..."
+  ]
+}
+```
+
+### 2.2 Tab 2: 웹뷰 브라우저
+**기능 설명**: 웹뷰를 통한 직접 인스타그램 접근 및 다운로드
+
+**주요 기능**:
+- 인스타그램 웹뷰 구현
+- 사용자 로그인 지원
+- 비공개 계정 접근 가능
+- HTML 파싱을 통한 이미지/비디오 URL 추출
+- 게시물 선택 및 다운로드 기능
+- 웹뷰 네비게이션 (뒤로가기, 새로고침)
+
+**기술 요구사항**:
+- WebView 구현
+- JavaScript 인젝션을 통한 HTML 분석
+- 쿠키/세션 관리
+
+### 2.3 Tab 3: 갤러리 (폰 갤러리 연동)
+**기능 설명**: 폰 갤러리에 저장된 InstaDownloader 미디어 조회 및 관리
+
+**주요 기능**:
+- MediaStore API를 통한 폰 갤러리 연동
+- Downloads/InstaDownloader 폴더의 미디어 파일 표시
+- 그리드 뷰로 썸네일 표시
+- 미디어 상세 보기 (기본 갤러리 앱 연동)
+- 파일 삭제 기능
+- 외부 앱으로 공유 기능 (시스템 공유 메뉴 활용)
+- 날짜별/타입별 필터링
+- Room DB에 메타데이터 저장 (원본 URL, 다운로드 날짜)
+
+## 3. 기술 명세
+
+### 3.1 아키텍처
+- **플랫폼**: Android (Java/Kotlin)
+- **네트워킹**: Retrofit2 + OkHttp3
+- **이미지 로딩**: Glide
+- **로컬 저장소**: Room Database
+- **파일 관리**: Android Storage Access Framework
+
+### 3.2 데이터 모델
+```kotlin
+// Room Entity - 메타데이터만 저장
+@Entity(tableName = "downloaded_media")
+data class DownloadedMedia(
+    @PrimaryKey val id: String,
+    val fileName: String,
+    val filePath: String, // MediaStore Uri 또는 파일 경로
+    val originalUrl: String,
+    val downloadDate: Long,
+    val mediaType: String, // "image" or "video"
+    val fileSize: Long
+)
+``` 
+
+### 3.3 권한 요구사항
+- `INTERNET`: 네트워크 접근
+- `READ_EXTERNAL_STORAGE`: 갤러리 파일 읽기 (API < 33)
+- `READ_MEDIA_IMAGES`: 이미지 읽기 (API >= 33)
+- `READ_MEDIA_VIDEO`: 비디오 읽기 (API >= 33)
+- `WRITE_EXTERNAL_STORAGE`: 파일 저장 (API < 29)
+- MediaStore API 사용으로 MANAGE_EXTERNAL_STORAGE 불필요
+
+## 4. UI/UX 설계
+
+### 4.1 네비게이션 구조
+```
+Bottom Navigation (3 tabs)
+├── URL Downloader
+│   ├── URL Input Field
+│   ├── Extract Button
+
+│   └── Media Preview & Download
+├── Web Browser
+│   ├── WebView
+│   ├── Navigation Controls
+│   └── Download Overlay
+└── Gallery
+    ├── Media Grid
+    ├── Filter Options
+    └── Detail View
+```
+
+
+### 4.2 주요 화면 플로우
+
+**Tab 1 플로우**:
+1. URL 입력 → 2. API 호출 → 3. 미디어 프리뷰 → 4. 다운로드 선택 → 5. 다운로드 완료
+2. /Users/kimseojin/Desktop/InstaDownloader/app/design_references/KakaoTalk_Photo_2025-08-17-19-18-08 003.jpeg
+3. /Users/kimseojin/Desktop/InstaDownloader/app/design_references/KakaoTalk_Photo_2025-08-17-19-18-08 002.jpeg
+를 참고해서 만들것 
+  
+**Tab 2 플로우**:
+1. 웹뷰 로드 → 2. 로그인 → 3. 게시물 탐색 → 4. 다운로드 버튼 표시 → 5. 다운로드
+ 2. /Users/kimseojin/Desktop/InstaDownloader/app/design_references/KakaoTalk_Photo_2025-08-17-19-18-08 001.jpeg
+      /Users/kimseojin/Desktop/InstaDownloader/app/design_references/KakaoTalk_Photo_2025-08-17-19-25-56.jpeg
+      를 참고해서 만들것
+
+
+**Tab 3 플로우**:
+1. 갤러리 보기 → 2. 미디어 선택 → 3. 상세 보기/공유/삭제
+   /Users/kimseojin/Desktop/InstaDownloader/app/design_references/KakaoTalk_Photo_2025-08-17-19-18-08 004.jpeg
+## 5. 성능 요구사항
+
+### 5.1 응답 시간
+- URL 파싱: 3초 이내
+- 이미지 다운로드: 10MB당 30초 이내
+- 갤러리 로딩: 1초 이내 (최대 100개 아이템)
+
+### 5.2 저장 공간
+- 앱 크기: 50MB 이하
+- 다운로드 파일: 사용자 설정 가능한 최대 용량
+
+### 5.3 메모리 사용
+- 백그라운드 메모리: 100MB 이하
+- 이미지 캐시: 200MB 이하
+
+## 6. 보안 고려사항
+
+### 6.1 사용자 데이터 보호
+- 로그인 정보는 로컬에 암호화 저장
+- HTTPS 통신만 허용
+- 개인정보 수집 최소화
+
+### 6.2 저작권 준수
+- 다운로드 시 저작권 고지사항 표시
+- 개인 사용 목적임을 명시
+- 상업적 이용 금지 안내
+
+## 7. 개발 우선순위
+
+### 7.1 Phase 1 (MVP)
+- Tab 1: URL 다운로더 기본 기능
+- 기본 UI 구현
+- 이미지 다운로드 기능
+
+### 7.2 Phase 2
+- Tab 2: 웹뷰 브라우저 구현
+- Tab 3: 갤러리 기본 기능
+- 비디오 다운로드 지원
+
+### 7.3 Phase 3
+- 고급 갤러리 기능 (필터링, 검색)
+- 다운로드 성능 최적화
+- UI/UX 개선
+
+## 8. 테스트 계획
+
+### 8.1 기능 테스트
+- 각 탭별 핵심 기능 검증
+- 다양한 인스타그램 URL 형식 테스트
+- 웹뷰 호환성 테스트
+
+### 8.2 성능 테스트
+- 대용량 파일 다운로드 테스트
+- 동시 다운로드 테스트
+- 메모리 누수 검증
+
+### 8.3 디바이스 호환성
+- 다양한 안드로이드 버전 테스트
+- 다양한 화면 크기 대응 테스트
+
+## 9. 릴리즈 계획
+
+### 9.1 내부 테스트
+- 알파 버전: 핵심 기능 구현 완료 후
+- 베타 버전: 전체 기능 구현 완료 후
+
+### 9.2 배포 전략
+- Google Play Store 출시
+- 사이드로딩용 APK 제공 고려
+
+## 10. 위험 요소 및 대응 방안
+
+### 10.1 기술적 위험
+- **인스타그램 API 변경**: 여러 파싱 방법 준비
+- **웹뷰 호환성**: 다양한 디바이스 테스트 강화
+
+### 10.2 법적 위험
+- **저작권 문제**: 면책조항 명시 및 개인 사용 제한
+- **플랫폼 정책**: Google Play 정책 준수 검토
+
+### 10.3 사용자 경험
+- **다운로드 실패**: 재시도 로직 및 오류 메시지 개선
+- **성능 저하**: 백그라운드 다운로드 및 캐싱 최적화
+</file>
+
+<file path="app/proguard-rules.pro">
+# Add project specific ProGuard rules here.
+# You can control the set of applied configuration files using the
+# proguardFiles setting in build.gradle.
+#
+# For more details, see
+#   http://developer.android.com/guide/developing/tools/proguard.html
+
+# If your project uses WebView with JS, uncomment the following
+# and specify the fully qualified class name to the JavaScript interface
+# class:
+#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
+#   public *;
+#}
+
+# Uncomment this to preserve the line number information for
+# debugging stack traces.
+#-keepattributes SourceFile,LineNumberTable
+
+# If you keep the line number information, uncomment this to
+# hide the original source file name.
+#-renamesourcefileattribute SourceFile
+</file>
+
+<file path="gradle/wrapper/gradle-wrapper.properties">
+#Sun Aug 17 14:30:09 KST 2025
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-8.13-bin.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+</file>
+
+<file path="gradle/libs.versions.toml">
+[versions]
+agp = "8.12.0"
+kotlin = "2.0.21"
+coreKtx = "1.16.0"
+junit = "4.13.2"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+lifecycleRuntimeKtx = "2.9.2"
+activityCompose = "1.10.1"
+composeBom = "2024.09.00"
+navigation = "2.8.4"
+room = "2.6.1"
+retrofit = "2.9.0"
+okhttp = "4.12.0"
+glide = "4.16.0"
+coil = "2.5.0"
+ksp = "2.0.21-1.0.26"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+retrofit-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+</file>
+
+<file path=".gitignore">
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+</file>
+
+<file path="build.gradle.kts">
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+}
+</file>
+
+<file path="gradle.properties">
+# Project-wide Gradle settings.
+# IDE (e.g. Android Studio) users:
+# Gradle settings configured through the IDE *will override*
+# any settings specified in this file.
+# For more details on how to configure your build environment visit
+# http://www.gradle.org/docs/current/userguide/build_environment.html
+# Specifies the JVM arguments used for the daemon process.
+# The setting is particularly useful for tweaking memory settings.
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+# When configured, Gradle will run in incubating parallel mode.
+# This option should only be used with decoupled projects. For more details, visit
+# https://developer.android.com/r/tools/gradle-multi-project-decoupled-projects
+# org.gradle.parallel=true
+# AndroidX package structure to make it clearer which packages are bundled with the
+# Android operating system, and which are packaged with your app's APK
+# https://developer.android.com/topic/libraries/support-library/androidx-rn
+android.useAndroidX=true
+# Kotlin code style for this project: "official" or "obsolete":
+kotlin.code.style=official
+# Enables namespacing of each library's R class so that its R class includes only the
+# resources declared in the library itself and none from the library's dependencies,
+# thereby reducing the size of the R class for that library
+android.nonTransitiveRClass=true
+</file>
+
+<file path="gradlew">
+#!/usr/bin/env sh
+
+#
+# Copyright 2015 the original author or authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+##############################################################################
+##
+##  Gradle start up script for UN*X
+##
+##############################################################################
+
+# Attempt to set APP_HOME
+# Resolve links: $0 may be a link
+PRG="$0"
+# Need this for relative symlinks.
+while [ -h "$PRG" ] ; do
+    ls=`ls -ld "$PRG"`
+    link=`expr "$ls" : '.*-> \(.*\)$'`
+    if expr "$link" : '/.*' > /dev/null; then
+        PRG="$link"
+    else
+        PRG=`dirname "$PRG"`"/$link"
+    fi
+done
+SAVED="`pwd`"
+cd "`dirname \"$PRG\"`/" >/dev/null
+APP_HOME="`pwd -P`"
+cd "$SAVED" >/dev/null
+
+APP_NAME="Gradle"
+APP_BASE_NAME=`basename "$0"`
+
+# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+
+# Use the maximum available, or set MAX_FD != -1 to use that value.
+MAX_FD="maximum"
+
+warn () {
+    echo "$*"
+}
+
+die () {
+    echo
+    echo "$*"
+    echo
+    exit 1
+}
+
+# OS specific support (must be 'true' or 'false').
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "`uname`" in
+  CYGWIN* )
+    cygwin=true
+    ;;
+  Darwin* )
+    darwin=true
+    ;;
+  MINGW* )
+    msys=true
+    ;;
+  NONSTOP* )
+    nonstop=true
+    ;;
+esac
+
+CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+
+
+# Determine the Java command to use to start the JVM.
+if [ -n "$JAVA_HOME" ] ; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        # IBM's JDK on AIX uses strange locations for the executables
+        JAVACMD="$JAVA_HOME/jre/sh/java"
+    else
+        JAVACMD="$JAVA_HOME/bin/java"
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+else
+    JAVACMD="java"
+    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+fi
+
+# Increase the maximum file descriptors if we can.
+if [ "$cygwin" = "false" -a "$darwin" = "false" -a "$nonstop" = "false" ] ; then
+    MAX_FD_LIMIT=`ulimit -H -n`
+    if [ $? -eq 0 ] ; then
+        if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ] ; then
+            MAX_FD="$MAX_FD_LIMIT"
+        fi
+        ulimit -n $MAX_FD
+        if [ $? -ne 0 ] ; then
+            warn "Could not set maximum file descriptor limit: $MAX_FD"
+        fi
+    else
+        warn "Could not query maximum file descriptor limit: $MAX_FD_LIMIT"
+    fi
+fi
+
+# For Darwin, add options to specify how the application appears in the dock
+if $darwin; then
+    GRADLE_OPTS="$GRADLE_OPTS \"-Xdock:name=$APP_NAME\" \"-Xdock:icon=$APP_HOME/media/gradle.icns\""
+fi
+
+# For Cygwin or MSYS, switch paths to Windows format before running java
+if [ "$cygwin" = "true" -o "$msys" = "true" ] ; then
+    APP_HOME=`cygpath --path --mixed "$APP_HOME"`
+    CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
+
+    JAVACMD=`cygpath --unix "$JAVACMD"`
+
+    # We build the pattern for arguments to be converted via cygpath
+    ROOTDIRSRAW=`find -L / -maxdepth 1 -mindepth 1 -type d 2>/dev/null`
+    SEP=""
+    for dir in $ROOTDIRSRAW ; do
+        ROOTDIRS="$ROOTDIRS$SEP$dir"
+        SEP="|"
+    done
+    OURCYGPATTERN="(^($ROOTDIRS))"
+    # Add a user-defined pattern to the cygpath arguments
+    if [ "$GRADLE_CYGPATTERN" != "" ] ; then
+        OURCYGPATTERN="$OURCYGPATTERN|($GRADLE_CYGPATTERN)"
+    fi
+    # Now convert the arguments - kludge to limit ourselves to /bin/sh
+    i=0
+    for arg in "$@" ; do
+        CHECK=`echo "$arg"|egrep -c "$OURCYGPATTERN" -`
+        CHECK2=`echo "$arg"|egrep -c "^-"`                                 ### Determine if an option
+
+        if [ $CHECK -ne 0 ] && [ $CHECK2 -eq 0 ] ; then                    ### Added a condition
+            eval `echo args$i`=`cygpath --path --ignore --mixed "$arg"`
+        else
+            eval `echo args$i`="\"$arg\""
+        fi
+        i=`expr $i + 1`
+    done
+    case $i in
+        0) set -- ;;
+        1) set -- "$args0" ;;
+        2) set -- "$args0" "$args1" ;;
+        3) set -- "$args0" "$args1" "$args2" ;;
+        4) set -- "$args0" "$args1" "$args2" "$args3" ;;
+        5) set -- "$args0" "$args1" "$args2" "$args3" "$args4" ;;
+        6) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" ;;
+        7) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" ;;
+        8) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" ;;
+        9) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" "$args8" ;;
+    esac
+fi
+
+# Escape application args
+save () {
+    for i do printf %s\\n "$i" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/' \\\\/" ; done
+    echo " "
+}
+APP_ARGS=`save "$@"`
+
+# Collect all arguments for the java command, following the shell quoting and substitution rules
+eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=$APP_BASE_NAME\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$APP_ARGS"
+
+exec "$JAVACMD" "$@"
+</file>
+
+<file path="gradlew.bat">
+@rem
+@rem Copyright 2015 the original author or authors.
+@rem
+@rem Licensed under the Apache License, Version 2.0 (the "License");
+@rem you may not use this file except in compliance with the License.
+@rem You may obtain a copy of the License at
+@rem
+@rem      https://www.apache.org/licenses/LICENSE-2.0
+@rem
+@rem Unless required by applicable law or agreed to in writing, software
+@rem distributed under the License is distributed on an "AS IS" BASIS,
+@rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+@rem See the License for the specific language governing permissions and
+@rem limitations under the License.
+@rem
+
+@if "%DEBUG%" == "" @echo off
+@rem ##########################################################################
+@rem
+@rem  Gradle startup script for Windows
+@rem
+@rem ##########################################################################
+
+@rem Set local scope for the variables with windows NT shell
+if "%OS%"=="Windows_NT" setlocal
+
+set DIRNAME=%~dp0
+if "%DIRNAME%" == "" set DIRNAME=.
+set APP_BASE_NAME=%~n0
+set APP_HOME=%DIRNAME%
+
+@rem Resolve any "." and ".." in APP_HOME to make it shorter.
+for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
+
+@rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
+
+@rem Find java.exe
+if defined JAVA_HOME goto findJavaFromJavaHome
+
+set JAVA_EXE=java.exe
+%JAVA_EXE% -version >NUL 2>&1
+if "%ERRORLEVEL%" == "0" goto execute
+
+echo.
+echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+
+goto fail
+
+:findJavaFromJavaHome
+set JAVA_HOME=%JAVA_HOME:"=%
+set JAVA_EXE=%JAVA_HOME%/bin/java.exe
+
+if exist "%JAVA_EXE%" goto execute
+
+echo.
+echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME%
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+
+goto fail
+
+:execute
+@rem Setup the command line
+
+set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+
+
+@rem Execute Gradle
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
+
+:end
+@rem End local scope for the variables with windows NT shell
+if "%ERRORLEVEL%"=="0" goto mainEnd
+
+:fail
+rem Set variable GRADLE_EXIT_CONSOLE if you need the _script_ return code instead of
+rem the _cmd.exe /c_ return code!
+if  not "" == "%GRADLE_EXIT_CONSOLE%" exit 1
+exit /b 1
+
+:mainEnd
+if "%OS%"=="Windows_NT" endlocal
+
+:omega
+</file>
+
+<file path="settings.gradle.kts">
+pluginManagement {
+    repositories {
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "InstaDownloader"
+include(":app")
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/data/download/MediaDownloader.kt">
+package com.example.instadownloader.data.download
+
+import android.content.ContentValues
+import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import com.example.instadownloader.data.database.AppDatabase
+import com.example.instadownloader.data.database.DownloadedMediaEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.util.UUID
+import android.util.Base64
+
+class MediaDownloader(private val context: Context) {
+    private val client = OkHttpClient()
+    private val database = AppDatabase.getDatabase(context)
+    private val mediaDao = database.downloadedMediaDao()
+    
+    suspend fun downloadMedia(
+        url: String,
+        filename: String,
+        isVideo: Boolean = false,
+        originalUrl: String = url,
+        onProgress: (Int) -> Unit = {}
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .build()
+            
+            val response = client.newCall(request).execute()
+            
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(Exception("Download failed: ${response.code}"))
+            }
+            
+            val body = response.body ?: return@withContext Result.failure(Exception("Empty response body"))
+            val contentLength = body.contentLength()
+            
+            // MediaStore를 사용하여 갤러리에 저장
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(MediaStore.MediaColumns.MIME_TYPE, if (isVideo) "video/mp4" else "image/jpeg")
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, 
+                        if (isVideo) Environment.DIRECTORY_MOVIES + "/InstaDownloader"
+                        else Environment.DIRECTORY_PICTURES + "/InstaDownloader")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+            }
+            
+            val contentResolver = context.contentResolver
+            val collection = if (isVideo) {
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            } else {
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            }
+            
+            val uri = contentResolver.insert(collection, contentValues)
+                ?: return@withContext Result.failure(Exception("Failed to create MediaStore entry"))
+            
+            contentResolver.openOutputStream(uri)?.use { outputStream ->
+                body.byteStream().use { inputStream ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalBytesRead = 0L
+                    
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                        totalBytesRead += bytesRead
+                        
+                        if (contentLength > 0) {
+                            val progress = (totalBytesRead * 100 / contentLength).toInt()
+                            onProgress(progress)
+                        }
+                    }
+                }
+            }
+            
+            // Android Q 이상에서 IS_PENDING 플래그 제거
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                contentResolver.update(uri, contentValues, null, null)
+            }
+            
+            // 데이터베이스에 메타데이터 저장
+            val mediaEntity = DownloadedMediaEntity(
+                id = UUID.randomUUID().toString(),
+                fileName = filename,
+                filePath = uri.toString(),
+                originalUrl = originalUrl,
+                downloadDate = System.currentTimeMillis(),
+                mediaType = if (isVideo) "video" else "image",
+                fileSize = contentLength,
+                thumbnailPath = uri.toString() // 이미지의 경우 자기 자신이 썸네일
+            )
+            
+            mediaDao.insertMedia(mediaEntity)
+            
+            Result.success(uri.toString())
+            
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    private fun generateFilename(url: String, isVideo: Boolean): String {
+        val timestamp = System.currentTimeMillis()
+        val extension = if (isVideo) "mp4" else "jpg"
+        val urlHash = url.hashCode().toString().takeLast(6)
+        return "insta_${timestamp}_${urlHash}.$extension"
+    }
+    
+    suspend fun downloadMediaList(
+        mediaUrls: List<String>,
+        isVideoList: List<Boolean>,
+        originalUrls: List<String> = mediaUrls,
+        onProgress: (Int, Int) -> Unit = { _, _ -> }, // current, total
+        onItemComplete: (Int, String) -> Unit = { _, _ -> }
+    ): Result<List<String>> = withContext(Dispatchers.IO) {
+        try {
+            val results = mutableListOf<String>()
+            
+            mediaUrls.forEachIndexed { index, url ->
+                val isVideo = isVideoList.getOrElse(index) { false }
+                val originalUrl = originalUrls.getOrElse(index) { url }
+                val filename = generateFilename(url, isVideo)
+                
+                val result = downloadMedia(url, filename, isVideo, originalUrl) { itemProgress ->
+                    // 개별 파일 진행률을 전체 진행률로 변환
+                    val totalProgress = (index * 100 + itemProgress) / mediaUrls.size
+                    onProgress(totalProgress, 100)
+                }
+                
+                result.fold(
+                    onSuccess = { savedUri ->
+                        results.add(savedUri)
+                        onItemComplete(index, savedUri)
+                    },
+                    onFailure = { error ->
+                        return@withContext Result.failure(error)
+                    }
+                )
+            }
+            
+            Result.success(results)
+            
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    suspend fun downloadBase64Video(
+        filename: String,
+        base64Data: String,
+        onProgress: (Int) -> Unit = {}
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            // Base64 데이터에서 데이터 URL 헤더 제거 (data:video/mp4;base64, 부분)
+            val base64Content = if (base64Data.contains(",")) {
+                base64Data.split(",")[1]
+            } else {
+                base64Data
+            }
+            
+            // Base64 디코딩
+            val videoBytes = Base64.decode(base64Content, Base64.DEFAULT)
+            onProgress(30)
+            
+            // MediaStore를 사용하여 갤러리에 저장
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, 
+                        Environment.DIRECTORY_MOVIES + "/InstaDownloader")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+            }
+            
+            val contentResolver = context.contentResolver
+            val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            
+            val uri = contentResolver.insert(collection, contentValues)
+                ?: return@withContext Result.failure(Exception("Failed to create MediaStore entry"))
+            
+            onProgress(50)
+            
+            // 비디오 데이터 저장
+            contentResolver.openOutputStream(uri)?.use { outputStream ->
+                outputStream.write(videoBytes)
+            }
+            
+            onProgress(80)
+            
+            // Android Q 이상에서 IS_PENDING 플래그 제거
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                contentResolver.update(uri, contentValues, null, null)
+            }
+            
+            onProgress(90)
+            
+            // 데이터베이스에 메타데이터 저장
+            val mediaEntity = DownloadedMediaEntity(
+                id = UUID.randomUUID().toString(),
+                fileName = filename,
+                filePath = uri.toString(),
+                originalUrl = "blob://instagram-video",
+                downloadDate = System.currentTimeMillis(),
+                mediaType = "video",
+                fileSize = videoBytes.size.toLong(),
+                thumbnailPath = uri.toString()
+            )
+            
+            mediaDao.insertMedia(mediaEntity)
+            onProgress(100)
+            
+            Result.success(uri.toString())
+            
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/InstagramScraper.kt">
+package com.example.instadownloader
+
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import org.json.JSONObject
+import java.net.URLEncoder
+
+object
+InstagramScraper {
+    private const val INSTAGRAM_DOCUMENT_ID = "8845758582119845"
+    private const val INSTAGRAM_URL = "https://www.instagram.com/graphql/query"
+    private val client = OkHttpClient()
+
+    fun scrapePostMedia(shortcodeOrUrl: String, quality: String = "high"): List<String> {
+        // shortcode 추출
+        val shortcode = if (shortcodeOrUrl.contains("http")) {
+            shortcodeOrUrl.split("/p/").last().split("/")[0]
+        } else {
+            shortcodeOrUrl
+        }
+
+        println("인스타그램 게시물 스크래핑 중: $shortcode")
+
+        // variables JSON
+        val variablesJson = JSONObject().apply {
+            put("shortcode", shortcode)
+            put("fetch_tagged_user_count", JSONObject.NULL)
+            put("hoisted_comment_id", JSONObject.NULL)
+            put("hoisted_reply_id", JSONObject.NULL)
+        }.toString()
+
+        val variables = URLEncoder.encode(variablesJson, "UTF-8")
+        val body = "variables=$variables&doc_id=$INSTAGRAM_DOCUMENT_ID"
+
+        // 요청 생성
+        val request = Request.Builder()
+            .url(INSTAGRAM_URL)
+            .post(RequestBody.create("application/x-www-form-urlencoded".toMediaType(), body))
+            .addHeader("content-type", "application/x-www-form-urlencoded")
+            .addHeader("x-csrftoken", "MXu5wPd59xPx1WWFL5jTyfxGsVFKB6Tp")
+            .addHeader("x-ig-app-id", "936619743392459")
+            .addHeader("user-agent", "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36")
+            .build()
+
+        // 동기 요청 (코루틴 안에서 withContext(IO)로 감싸는게 안전)
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("Request failed: ${response.code}")
+
+            val jsonStr = response.body?.string() ?: throw Exception("Empty response")
+            println("Instagram API Response: $jsonStr")
+            
+            val rootJson = JSONObject(jsonStr)
+            
+            // 오류 체크
+            if (rootJson.has("errors")) {
+                val errors = rootJson.getJSONArray("errors")
+                throw Exception("Instagram API Error: ${errors.getJSONObject(0).getString("message")}")
+            }
+            
+            val dataJson = rootJson.optJSONObject("data")
+            if (dataJson == null) {
+                throw Exception("No data field in response")
+            }
+            
+            val mediaJson = dataJson.optJSONObject("xdt_shortcode_media")
+            if (mediaJson == null) {
+                throw Exception("로그인이 필요한 게시물 입니다")
+            }
+
+            return extractMediaUrls(mediaJson, quality)
+        }
+    }
+
+    private fun extractMediaUrls(postData: JSONObject, quality: String): List<String> {
+        val urls = mutableListOf<String>()
+        val qualityIndex = mapOf("low" to 0, "medium" to 1, "high" to 2)
+        val index = qualityIndex[quality] ?: 2
+
+        val typeName = postData.getString("__typename")
+
+        if (typeName == "XDTGraphSidecar") {
+            // 여러 장 (캐러셀)
+            val children = postData
+                .getJSONObject("edge_sidecar_to_children")
+                .getJSONArray("edges")
+
+            for (i in 0 until children.length()) {
+                val node = children.getJSONObject(i).getJSONObject("node")
+                if (node.getBoolean("is_video")) {
+                    urls.add(node.getString("video_url"))
+                } else {
+                    val displayResources = node.getJSONArray("display_resources")
+                    val resource = if (displayResources.length() > index) {
+                        displayResources.getJSONObject(index)
+                    } else {
+                        displayResources.getJSONObject(displayResources.length() - 1)
+                    }
+                    urls.add(resource.getString("src"))
+                }
+            }
+        } else {
+            // 단일 미디어
+            if (postData.getBoolean("is_video")) {
+                urls.add(postData.getString("video_url"))
+            } else {
+                val displayResources = postData.getJSONArray("display_resources")
+                val resource = if (displayResources.length() > index) {
+                    displayResources.getJSONObject(index)
+                } else {
+                    displayResources.getJSONObject(displayResources.length() - 1)
+                }
+                urls.add(resource.getString("src"))
+            }
+        }
+
+        return urls
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/MainActivity.kt">
+package com.example.instadownloader
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.example.instadownloader.ui.screens.GalleryScreen
+import com.example.instadownloader.ui.screens.UrlDownloaderScreen
+import com.example.instadownloader.ui.screens.WebBrowserScreen
+import com.example.instadownloader.ui.theme.InstaDownloaderTheme
+//나는 version3-branch 의 첫커밋임
+sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    object UrlDownloader : Screen("url_downloader", "다운로더", Icons.Default.Home)
+    object WebBrowser : Screen("web_browser", "브라우저", Icons.Default.Search)
+    object Gallery : Screen("gallery", "갤러리", Icons.Default.Settings)
+}
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            InstaDownloaderTheme {
+                MainApp()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainApp() {
+    val navController = rememberNavController()
+    val screens = listOf(
+        Screen.UrlDownloader,
+        Screen.WebBrowser,
+        Screen.Gallery
+    )
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            NavigationBar {
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentDestination = navBackStackEntry?.destination
+
+                screens.forEach { screen ->
+                    NavigationBarItem(
+                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        label = { Text(screen.title) },
+                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        onClick = {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.UrlDownloader.route,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable(Screen.UrlDownloader.route) { UrlDownloaderScreen() }
+            composable(Screen.WebBrowser.route) { WebBrowserScreen() }
+            composable(Screen.Gallery.route) { GalleryScreen() }
+        }
+    }
+}
+</file>
+
+<file path="app/src/main/java/com/example/instadownloader/ui/screens/WebBrowserScreen.kt">
+package com.example.instadownloader.ui.screens
+
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.os.Message
+import android.webkit.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun WebBrowserScreen() {
+    val context = LocalContext.current
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Instagram WebView with popup and multi-window support
+        AndroidView(
+            factory = { context ->
+                WebView(context).apply {
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        @Suppress("DEPRECATION")
+                        databaseEnabled = true
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                        
+                        // ✅ 팝업/새창 허용 (회색 오버레이 원인 해소)
+                        setSupportMultipleWindows(true)
+                        javaScriptCanOpenWindowsAutomatically = true
+                        
+                        // ✅ Instagram 웹뷰 차단 우회 (wv 토큰 완전 제거)
+                        val defaultUA = WebSettings.getDefaultUserAgent(context)
+                        userAgentString = defaultUA
+                            .replace("; wv", "")              // WebView 토큰 제거
+                            .replace("Version/4.0", "Version/4.0 Chrome/131.0.0.0") // 브라우저 시그니처 강화
+                        
+                        // ✅ 파일 및 콘텐츠 접근 (Android 13+ 쿠키 처리에 중요)
+                        allowFileAccess = false
+                        allowContentAccess = true
+                        @Suppress("DEPRECATION")
+                        allowFileAccessFromFileURLs = false
+                        @Suppress("DEPRECATION")  
+                        allowUniversalAccessFromFileURLs = false
+                        
+                        // 미디어 자동재생 허용
+                        mediaPlaybackRequiresUserGesture = false
+                        
+                        // 모바일 반응형 뷰포트 설정
+                        loadWithOverviewMode = false
+                        useWideViewPort = true
+                        setSupportZoom(true)
+                        builtInZoomControls = false
+                        displayZoomControls = false
+                        
+                        // 보안 설정 (권장: 혼합콘텐츠 금지)
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        
+                        // 모바일 최적화
+                        layoutAlgorithm = WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                        textZoom = 100
+                    }
+                    
+                    // ✅ 팝업 창을 현재 WebView로 라우팅
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onCreateWindow(
+                            view: WebView?,
+                            isDialog: Boolean,
+                            isUserGesture: Boolean,
+                            resultMsg: Message?
+                        ): Boolean {
+                            val transport = resultMsg?.obj as? WebView.WebViewTransport
+                            // 새 창 대신 현재 WebView 재사용
+                            transport?.webView = this@apply
+                            resultMsg?.sendToTarget()
+                            return true
+                        }
+                    }
+                    
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            // Instagram 페이지가 로드된 후 다운로드 버튼 스크립트 주입
+                            if (url?.contains("instagram.com") == true) {
+                                injectDownloadButtonScript(view)
+                            }
+                        }
+                        
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?
+                        ): Boolean {
+                            val url = request?.url ?: return false
+                            val scheme = url.scheme ?: return false
+                            
+                            if (scheme == "http" || scheme == "https") {
+                                val host = url.host.orEmpty()
+                                
+                                // ✅ 확장된 인스타/메타 도메인 화이트리스트 (로그인/SSO 과정 포함)
+                                val allowedDomains = listOf(
+                                    // Instagram 코어 도메인
+                                    "instagram.com", "www.instagram.com", "m.instagram.com",
+                                    "i.instagram.com", "help.instagram.com",
+                                    
+                                    // Instagram CDN 및 미디어 도메인  
+                                    "cdninstagram.com", "static.cdninstagram.com",
+                                    "scontent-ssn1-1.cdninstagram.com", "scontent.cdninstagram.com",
+                                    
+                                    // Instagram 링크 및 리다이렉션
+                                    "l.instagram.com", "link.instagram.com",
+                                    
+                                    // Facebook/Meta 계열 (SSO, Accounts Center)
+                                    "facebook.com", "www.facebook.com", "m.facebook.com",
+                                    "accountscenter.instagram.com", "accountscenter.facebook.com",
+                                    "meta.com", "www.meta.com",
+                                    
+                                    // Facebook CDN
+                                    "fbcdn.net", "static.xx.fbcdn.net", "static.cdninstagram.com",
+                                    "scontent.xx.fbcdn.net", "external.xx.fbcdn.net"
+                                )
+                                
+                                // 인스타/메타 계열은 WebView 내에서 처리 (가급적 제한 없이)
+                                if (allowedDomains.any { host == it || host.endsWith(".$it") }) {
+                                    return false // WebView에서 처리
+                                }
+                                
+                                // ✅ http/https는 가급적 가로채지 않고 WebView에서 처리 (안전한 접근)
+                                // 단, 명백히 외부 사이트인 경우만 외부 브라우저로
+                                val blockedDomains = listOf(
+                                    "google.com", "youtube.com", "twitter.com", "tiktok.com",
+                                    "amazon.com", "apple.com", "microsoft.com", "github.com"
+                                )
+                                
+                                if (blockedDomains.any { host == it || host.endsWith(".$it") }) {
+                                    return try {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, url))
+                                        true
+                                    } catch (_: Exception) {
+                                        false // 실패 시 WebView에서 처리
+                                    }
+                                }
+                                
+                                // ✅ 기타 http/https는 WebView에서 처리 (도메인 필터 과도 제한 금지)
+                                return false
+                            }
+                            
+                            // mailto:, tel:, intent: 등은 외부로
+                            return try {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, url))
+                                true
+                            } catch (_: Exception) {
+                                true
+                            }
+                        }
+                    }
+                    
+                    // ✅ 쿠키 매니저 설정 (Android 13+ 중요 - 제3자 쿠키 허용)
+                    val cookieManager = CookieManager.getInstance()
+                    cookieManager.setAcceptCookie(true)
+                    // Android 13에서 쿠키 동의/SSO에 필수
+                    cookieManager.setAcceptThirdPartyCookies(this, true)
+                    
+                    // 쿠키 동기화 (세션 유지에 중요)
+                    cookieManager.flush()
+                    
+                    loadUrl("https://www.instagram.com/accounts/login/")
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+private fun injectDownloadButtonScript(webView: WebView?) {
+    webView?.evaluateJavascript(
+        """
+        (function() {
+            console.log('Starting Instagram download button injection...');
+            
+            function createDownloadButton() {
+                const button = document.createElement('div');
+                button.innerHTML = '⬇';
+                button.style.cssText = `
+                    position: absolute;
+                    top: 12px;
+                    left: 12px;
+                    width: 44px;
+                    height: 44px;
+                    background: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    z-index: 9999;
+                    font-size: 20px;
+                    font-weight: bold;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+                    transition: all 0.2s ease;
+                    user-select: none;
+                    touch-action: manipulation;
+                    -webkit-tap-highlight-color: transparent;
+                `;
+                
+                // 터치 이벤트 최적화 (모바일)
+                button.ontouchstart = function(e) {
+                    e.preventDefault();
+                    this.style.transform = 'scale(1.1)';
+                    this.style.background = 'rgba(25, 118, 210, 0.9)';
+                };
+                
+                button.ontouchend = function(e) {
+                    e.preventDefault();
+                    this.style.transform = 'scale(1)';
+                    this.style.background = 'rgba(0, 0, 0, 0.8)';
+                };
+                
+                // 마우스 이벤트 (데스크톱 호환)
+                button.onmouseenter = function() {
+                    this.style.transform = 'scale(1.1)';
+                    this.style.background = 'rgba(25, 118, 210, 0.9)';
+                };
+                
+                button.onmouseleave = function() {
+                    this.style.transform = 'scale(1)';
+                    this.style.background = 'rgba(0, 0, 0, 0.8)';
+                };
+                
+                return button;
+            }
+            
+            function extractMediaFromPost(article) {
+                console.log('Extracting media from post...');
+                const mediaUrls = new Set();
+                
+                // 단일 이미지/비디오 추출
+                const images = article.querySelectorAll('img');
+                images.forEach(img => {
+                    const src = img.src || img.currentSrc;
+                    if (src && (src.includes('cdninstagram') || src.includes('fbcdn'))) {
+                        // 고해상도 이미지 URL로 변환
+                        const highResUrl = src.replace(/s\d{3,4}x\d{3,4}/, 's1080x1080');
+                        mediaUrls.add(highResUrl);
+                        console.log('Found image:', highResUrl);
+                    }
+                });
+                
+                // 비디오 추출
+                const videos = article.querySelectorAll('video');
+                videos.forEach(video => {
+                    const src = video.src || video.currentSrc;
+                    if (src && (src.includes('cdninstagram') || src.includes('fbcdn'))) {
+                        mediaUrls.add(src);
+                        console.log('Found video:', src);
+                    }
+                });
+                
+                return Array.from(mediaUrls);
+            }
+            
+            // 모바일 최적화된 알림 함수
+            function showMobileNotification(message, type) {
+                const notification = document.createElement('div');
+                notification.innerHTML = message;
+                
+                const bgColor = type === 'error' ? 'rgba(244, 67, 54, 0.9)' : 'rgba(76, 175, 80, 0.9)';
+                
+                notification.style.cssText = 
+                    'position: fixed;' +
+                    'top: 20px;' +
+                    'left: 50%;' +
+                    'transform: translateX(-50%);' +
+                    'background: ' + bgColor + ';' +
+                    'color: white;' +
+                    'padding: 16px 24px;' +
+                    'border-radius: 28px;' +
+                    'z-index: 10000;' +
+                    'font-size: 16px;' +
+                    'font-weight: 500;' +
+                    'box-shadow: 0 4px 12px rgba(0,0,0,0.3);' +
+                    'max-width: 90vw;' +
+                    'text-align: center;' +
+                    'animation: slideDown 0.3s ease-out;';
+                
+                // CSS 애니메이션 정의
+                if (!document.getElementById('mobile-notification-styles')) {
+                    const style = document.createElement('style');
+                    style.id = 'mobile-notification-styles';
+                    style.textContent = 
+                        '@keyframes slideDown {' +
+                        'from { opacity: 0; transform: translateX(-50%) translateY(-20px); }' +
+                        'to { opacity: 1; transform: translateX(-50%) translateY(0); }' +
+                        '}';
+                    document.head.appendChild(style);
+                }
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.style.opacity = '0';
+                        notification.style.transform = 'translateX(-50%) translateY(-20px)';
+                        setTimeout(() => {
+                            notification.parentNode.removeChild(notification);
+                        }, 300);
+                    }
+                }, type === 'error' ? 2000 : 3000);
+            }
+            
+            function simulateDownload(mediaUrls) {
+                console.log('Simulating download for', mediaUrls.length, 'media items');
+                
+                // 각 미디어 URL에 대해 다운로드 시뮬레이션
+                mediaUrls.forEach((url, index) => {
+                    setTimeout(() => {
+                        // Create a temporary link to trigger download
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = 'instagram_media_' + Date.now() + '_' + index;
+                        link.style.display = 'none';
+                        document.body.appendChild(link);
+                        
+                        // Trigger download (note: this may not work due to CORS)
+                        try {
+                            link.click();
+                        } catch (e) {
+                            console.log('Direct download failed, copying URL to clipboard instead');
+                            
+                            // 다운로드 실패 시 URL을 콘솔에 출력
+                            console.log('Media URL ' + (index + 1) + ':', url);
+                        }
+                        
+                        document.body.removeChild(link);
+                    }, index * 500); // Stagger downloads
+                });
+                
+                // Show mobile-optimized notification
+                showMobileNotification('찾은 미디어 ' + mediaUrls.length + '개를 다운로드 중...', 'success');
+            }
+            
+            function addDownloadButtons() {
+                const articles = document.querySelectorAll('article');
+                console.log('Found', articles.length, 'articles');
+                
+                articles.forEach((article, index) => {
+                    // 이미 버튼이 있으면 스킵
+                    if (article.querySelector('.insta-download-btn')) {
+                        return;
+                    }
+                    
+                    // 미디어 컨테이너 찾기 (Instagram의 구조에 따라)
+                    const mediaContainer = article.querySelector('div > div:nth-child(2)') || 
+                                         article.querySelector('div[role="button"]')?.closest('div') ||
+                                         article.querySelector('img, video')?.closest('div');
+                    
+                    if (!mediaContainer) {
+                        console.log('Media container not found for article', index);
+                        return;
+                    }
+                    
+                    const downloadBtn = createDownloadButton();
+                    downloadBtn.classList.add('insta-download-btn');
+                    
+                    // 터치와 클릭 이벤트 모두 지원 (모바일 최적화)
+                    function handleDownloadClick(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // 터치 피드백
+                        downloadBtn.style.transform = 'scale(0.95)';
+                        setTimeout(() => {
+                            downloadBtn.style.transform = 'scale(1)';
+                        }, 100);
+                        
+                        console.log('Download button clicked for article', index);
+                        const mediaUrls = extractMediaFromPost(article);
+                        
+                        if (mediaUrls.length > 0) {
+                            simulateDownload(mediaUrls);
+                        } else {
+                            console.log('No media found in this post');
+                            showMobileNotification('이 포스트에서 미디어를 찾을 수 없습니다', 'error');
+                        }
+                    }
+                    
+                    // 터치 및 클릭 이벤트 등록
+                    downloadBtn.addEventListener('touchend', handleDownloadClick, { passive: false });
+                    downloadBtn.addEventListener('click', handleDownloadClick);
+                    
+                    // Position the button
+                    const parentStyle = window.getComputedStyle(mediaContainer);
+                    if (parentStyle.position === 'static') {
+                        mediaContainer.style.position = 'relative';
+                    }
+                    
+                    mediaContainer.appendChild(downloadBtn);
+                    console.log('Download button added to article', index);
+                });
+            }
+            
+            // 초기 버튼 추가
+            addDownloadButtons();
+            
+            // 스크롤 및 페이지 변경 감지
+            let buttonUpdateTimeout;
+            function scheduleButtonUpdate() {
+                clearTimeout(buttonUpdateTimeout);
+                buttonUpdateTimeout = setTimeout(addDownloadButtons, 1000);
+            }
+            
+            // 스크롤 이벤트
+            window.addEventListener('scroll', scheduleButtonUpdate);
+            
+            // DOM 변화 감지
+            const observer = new MutationObserver(function(mutations) {
+                let shouldUpdate = false;
+                mutations.forEach(function(mutation) {
+                    if (mutation.addedNodes.length > 0) {
+                        for (let node of mutation.addedNodes) {
+                            if (node.nodeType === 1 && (node.tagName === 'ARTICLE' || node.querySelector('article'))) {
+                                shouldUpdate = true;
+                                break;
+                            }
+                        }
+                    }
+                });
+                
+                if (shouldUpdate) {
+                    console.log('New articles detected, updating buttons...');
+                    scheduleButtonUpdate();
+                }
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+            
+            console.log('Instagram download button script injection completed');
+        })();
+        """.trimIndent(),
+        null
+    )
+}
+</file>
+
+</files>

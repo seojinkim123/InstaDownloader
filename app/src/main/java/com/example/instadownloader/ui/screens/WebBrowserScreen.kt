@@ -44,6 +44,7 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.example.instadownloader.data.download.MediaDownloader
+import androidx.activity.compose.BackHandler
 
 data class InstagramMediaItem(
     val url: String,
@@ -126,6 +127,26 @@ fun WebBrowserScreen() {
         skipPartiallyExpanded = true
     )
 
+    // 뒤로가기 처리: 웹뷰에서 뒤로갈 수 있으면 웹뷰 뒤로가기 실행, 없으면 기본 동작
+    BackHandler(enabled = true) {
+        Log.d("WebView", "BackHandler 실행됨 - canGoBack: $canGoBack")
+        webView?.let { webViewInstance ->
+            if (webViewInstance.canGoBack()) {
+                Log.d("WebView", "웹뷰 뒤로가기 실행")
+                webViewInstance.goBack()
+                // 뒤로가기 실행 후 상태 업데이트
+                canGoBack = webViewInstance.canGoBack()
+                Log.d("WebView", "웹뷰 뒤로가기 실행 후 - canGoBack: $canGoBack")
+            } else {
+                Log.d("WebView", "웹뷰에서 뒤로갈 페이지가 없음 - 기본 뒤로가기 실행하지 않음")
+                // 여기서는 아무것도 하지 않으므로, 시스템 기본 뒤로가기가 실행되지 않음
+                // 탭 전환을 원한다면 명시적으로 처리해야 함
+            }
+        } ?: run {
+            Log.d("WebView", "웹뷰가 null - 기본 뒤로가기 실행하지 않음")
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -138,8 +159,11 @@ fun WebBrowserScreen() {
         ) {
             IconButton(
                 onClick = {
-                    if (canGoBack) {
-                        webView?.goBack()
+                    webView?.let { webViewInstance ->
+                        if (webViewInstance.canGoBack()) {
+                            webViewInstance.goBack()
+                            canGoBack = webViewInstance.canGoBack()
+                        }
                     }
                 },
                 enabled = canGoBack
@@ -184,7 +208,8 @@ fun WebBrowserScreen() {
                             super.onPageStarted(view, url, favicon)
                             isLoading = true
                             currentUrl = url ?: ""
-                            Log.d("WebView", "페이지 시작: $url")
+                            canGoBack = view?.canGoBack() ?: false
+                            Log.d("WebView", "페이지 시작: $url, canGoBack: $canGoBack")
                         }
 
                         override fun onPageFinished(view: WebView?, url: String?) {
@@ -192,7 +217,7 @@ fun WebBrowserScreen() {
                             isLoading = false
                             canGoBack = view?.canGoBack() ?: false
                             currentUrl = url ?: ""
-                            Log.d("WebView", "페이지 완료: $url")
+                            Log.d("WebView", "페이지 완료: $url, canGoBack: $canGoBack")
 
                             // ✨ 추가된 부분 시작
                             // "X" 닫기 버튼 자동 클릭 스크립트 주입 (모든 페이지에서 실행)

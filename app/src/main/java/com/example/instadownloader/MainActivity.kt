@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -20,9 +21,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import com.example.instadownloader.ui.screens.GalleryScreen
 import com.example.instadownloader.ui.screens.UrlDownloaderScreen
 import com.example.instadownloader.ui.screens.WebBrowserScreen
+import android.webkit.WebView
 import com.example.instadownloader.ui.theme.InstaDownloaderTheme
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
@@ -82,7 +86,9 @@ fun MainApp() {
         NavHost(
             navController = navController,
             startDestination = Screen.UrlDownloader.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None }
         ) {
             composable(Screen.UrlDownloader.route) { UrlDownloaderScreen() }
             composable(Screen.WebBrowser.route) { WebBrowserScreen() }

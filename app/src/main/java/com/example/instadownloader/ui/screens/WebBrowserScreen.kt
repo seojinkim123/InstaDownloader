@@ -27,7 +27,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
@@ -45,6 +44,24 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.example.instadownloader.data.download.MediaDownloader
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.DisposableEffect
+import java.lang.ref.WeakReference
+
+// 웹뷰 상태를 전역으로 관리하는 싱글톤
+object WebViewManager {
+    private var cachedWebView: WeakReference<WebView>? = null
+    
+    fun getCachedWebView(): WebView? = cachedWebView?.get()
+    
+    fun setCachedWebView(webView: WebView) {
+        cachedWebView = WeakReference(webView)
+    }
+    
+    fun clearCache() {
+        cachedWebView?.clear()
+        cachedWebView = null
+    }
+}
 
 data class InstagramMediaItem(
     val url: String,
@@ -60,8 +77,10 @@ class WebViewInterface(
 ) {
     @JavascriptInterface
     fun showDownloadDialog(mediaJson: String) {
+        Log.d("WebView", "JavaScript showDownloadDialog 호출됨: $mediaJson")
         try {
             val mediaList = parseMediaJson(mediaJson)
+            Log.d("WebView", "파싱된 미디어 개수: ${mediaList.size}")
             Handler(Looper.getMainLooper()).post {
                 onMediaFound(mediaList)
             }
@@ -113,10 +132,10 @@ class WebViewInterface(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WebBrowserScreen() {
-    var webView: WebView? by remember { mutableStateOf(null) }
-    var canGoBack by remember { mutableStateOf(false) }
+    val cachedWebView = WebViewManager.getCachedWebView()
+    var webView: WebView? by remember { mutableStateOf(cachedWebView) }
+    var canGoBack by remember { mutableStateOf(cachedWebView?.canGoBack() ?: false) }
     var isLoading by remember { mutableStateOf(false) }
-    var currentUrl by remember { mutableStateOf("") }
     var showBottomSheet by remember { mutableStateOf(false) }
     var mediaItems by remember { mutableStateOf<List<InstagramMediaItem>>(emptyList()) }
     var selectedItems by remember { mutableStateOf<List<InstagramMediaItem>>(emptyList()) }
@@ -126,6 +145,15 @@ fun WebBrowserScreen() {
     val bottomSheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true
     )
+
+    // 웹뷰 상태 관리
+    DisposableEffect(Unit) {
+        Log.d("WebView", "WebBrowserScreen 시작 - 캐시된 웹뷰 로드 시도")
+        onDispose {
+            Log.d("WebView", "WebBrowserScreen 종료 - 웹뷰 상태 유지")
+            // 웹뷰는 캐시에서 계속 유지됨
+        }
+    }
 
     // 뒤로가기 처리: 웹뷰에서 뒤로갈 수 있으면 웹뷰 뒤로가기 실행, 없으면 기본 동작
     BackHandler(enabled = true) {
@@ -150,27 +178,13 @@ fun WebBrowserScreen() {
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        // 상단 네비게이션 바
-        Row(
+        // 간소화된 상단바 (새로고침 버튼만)
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .wrapContentHeight(),
+            contentAlignment = Alignment.CenterEnd
         ) {
-            IconButton(
-                onClick = {
-                    webView?.let { webViewInstance ->
-                        if (webViewInstance.canGoBack()) {
-                            webViewInstance.goBack()
-                            canGoBack = webViewInstance.canGoBack()
-                        }
-                    }
-                },
-                enabled = canGoBack
-            ) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "뒤로가기")
-            }
-
             IconButton(
                 onClick = {
                     webView?.reload()
@@ -178,36 +192,34 @@ fun WebBrowserScreen() {
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = "새로고침")
             }
-
+            
+            // 로딩 인디케이터
             if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
-                )
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
             }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // 현재 URL 표시
-            Text(
-                text = currentUrl.take(30) + if (currentUrl.length > 30) "..." else "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
-
-        HorizontalDivider()
 
         // 웹뷰
         AndroidView(
             factory = { context ->
-                WebView(context).apply {
+                // 캐시된 웹뷰가 있으면 사용, 없으면 새로 생성
+                val cachedInstance = WebViewManager.getCachedWebView()
+                val webViewInstance = cachedInstance ?: WebView(context)
+                
+                webViewInstance.apply {
                     // 🔧 핵심 수정사항들
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                             super.onPageStarted(view, url, favicon)
                             isLoading = true
-                            currentUrl = url ?: ""
                             canGoBack = view?.canGoBack() ?: false
                             Log.d("WebView", "페이지 시작: $url, canGoBack: $canGoBack")
                         }
@@ -216,7 +228,6 @@ fun WebBrowserScreen() {
                             super.onPageFinished(view, url)
                             isLoading = false
                             canGoBack = view?.canGoBack() ?: false
-                            currentUrl = url ?: ""
                             Log.d("WebView", "페이지 완료: $url, canGoBack: $canGoBack")
 
                             // ✨ 추가된 부분 시작
@@ -226,8 +237,13 @@ fun WebBrowserScreen() {
 
                             // 로그인 페이지인 경우 스크립트 주입하지 않음 (기존 로직 유지)
                             if (url?.contains("accounts/login") == false) {
+                                Log.d("WebView", "Instagram 스크립트 주입 시작 - URL: $url")
                                 // Instagram 포스트 감지 및 다운로드 버튼 추가 JavaScript 주입
-                                view?.evaluateJavascript(getInstagramScript(), null)
+                                view?.evaluateJavascript(getInstagramScript()) { result ->
+                                    Log.d("WebView", "Instagram 스크립트 주입 완료 - 결과: $result")
+                                }
+                            } else {
+                                Log.d("WebView", "로그인 페이지이므로 스크립트 주입 생략 - URL: $url")
                             }
                         }
 
@@ -285,10 +301,18 @@ fun WebBrowserScreen() {
                         }
                     }
 
-                    // JavaScript 인터페이스 추가
+                    // JavaScript 인터페이스 추가 (캐시된 웹뷰라도 항상 재설정)
+                    // 기존 인터페이스 제거 후 새로 설정
+                    try {
+                        removeJavascriptInterface("Android")
+                    } catch (e: Exception) {
+                        Log.d("WebView", "기존 JavaScript Interface 제거 실패 (정상): ${e.message}")
+                    }
+                    
                     addJavascriptInterface(
                         WebViewInterface(
                             onMediaFound = { foundMedia ->
+                                Log.d("WebView", "JavaScript onMediaFound 호출됨: ${foundMedia.size}개 미디어")
                                 mediaItems = foundMedia
                                 selectedItems = foundMedia
                                 showBottomSheet = true
@@ -332,6 +356,7 @@ fun WebBrowserScreen() {
                         ),
                         "Android"
                     )
+                    Log.d("WebView", "JavaScript Interface 'Android' 설정 완료")
 
                     // 🔧 핵심 웹뷰 설정 (인스타그램 로그인 문제 해결)
                     settings.apply {
@@ -414,9 +439,16 @@ fun WebBrowserScreen() {
                     // 🔧 하드웨어 가속 활성화
                     setLayerType(WebView.LAYER_TYPE_HARDWARE, null)
 
-                    // Instagram 로드
-                    loadUrl("https://www.instagram.com")
+                    // 첫 생성시에만 Instagram 로드
+                    if (cachedInstance == null) {
+                        loadUrl("https://www.instagram.com")
+                    } else {
+                        Log.d("WebView", "캐시된 웹뷰 재사용 - 현재 URL: ${this.url}")
+                    }
+                    
+                    // 웹뷰 인스턴스 저장
                     webView = this
+                    WebViewManager.setCachedWebView(this)
                 }
             },
             modifier = Modifier.fillMaxSize()

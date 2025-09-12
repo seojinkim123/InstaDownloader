@@ -850,9 +850,13 @@ private fun getInstagramScript(): String {
                             const rect = btn.getBoundingClientRect();
                             const containerRect = container.getBoundingClientRect();
                             
+//                            if (rect.left > containerRect.left + containerRect.width / 2 && 
+//                                rect.width > 0 && rect.height > 0 &&
+//                                (ariaLabel && (ariaLabel.includes('Next') || ariaLabel.includes('다음') || ariaLabel.includes('넘기')))) {
+
+
                             if (rect.left > containerRect.left + containerRect.width / 2 && 
-                                rect.width > 0 && rect.height > 0 &&
-                                (ariaLabel && (ariaLabel.includes('Next') || ariaLabel.includes('다음') || ariaLabel.includes('넘기')))) {
+                                rect.width > 0 && rect.height > 0 ) {
                                 nextButton = btn;
                                 break;
                             }

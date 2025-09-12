@@ -56,6 +56,9 @@ object WebViewManager {
     private val _mediaItems = mutableStateOf<List<InstagramMediaItem>>(emptyList())
     private val _selectedItems = mutableStateOf<List<InstagramMediaItem>>(emptyList())
     
+    // 임시 메모리 캐시 (앱 종료 시 자동 삭제)
+    private val postMediaCache = mutableMapOf<String, List<InstagramMediaItem>>()
+    
     // Compose에서 관찰 가능한 State 노출
     val showBottomSheet: State<Boolean> = _showBottomSheet
     val mediaItems: State<List<InstagramMediaItem>> = _mediaItems
@@ -74,6 +77,22 @@ object WebViewManager {
         _showBottomSheet.value = false
         _mediaItems.value = emptyList()
         _selectedItems.value = emptyList()
+        // 미디어 캐시도 초기화
+        postMediaCache.clear()
+    }
+    
+    // 포스트 미디어 캐시 관련 메소드들
+    fun getCachedMedia(postKey: String): List<InstagramMediaItem>? {
+        return postMediaCache[postKey]
+    }
+    
+    fun setCachedMedia(postKey: String, mediaItems: List<InstagramMediaItem>) {
+        postMediaCache[postKey] = mediaItems
+        Log.d("WebView", "포스트 미디어 캐시 저장: $postKey, ${mediaItems.size}개")
+    }
+    
+    fun getCacheSize(): Int {
+        return postMediaCache.size
     }
     
     // 바텀시트 상태 업데이트 메서드들
@@ -152,6 +171,20 @@ class WebViewInterface(
         Handler(Looper.getMainLooper()).post {
             onBlobDownload(filename, base64Data)
         }
+    }
+
+    @JavascriptInterface
+    fun getCachedMedia(postKey: String): String? {
+        val cached = WebViewManager.getCachedMedia(postKey)
+        return if (cached != null) {
+            cached.joinToString("||") { "${it.type}::${it.url}" }
+        } else null
+    }
+
+    @JavascriptInterface
+    fun setCachedMedia(postKey: String, mediaData: String) {
+        val mediaList = parseMediaJson(mediaData)
+        WebViewManager.setCachedMedia(postKey, mediaList)
     }
 
     private fun parseMediaJson(json: String): List<InstagramMediaItem> {
@@ -716,8 +749,53 @@ private fun getInstagramScript(): String {
                 });
             }
             
+            // 포스트 고유 키 생성 (URL 기반)
+            function generatePostKey(article) {
+                // 포스트 URL을 찾는 여러 방법 시도
+                let postUrl = '';
+                
+                // 1. 포스트 링크 찾기 (a[href*="/p/"])
+                const postLink = article.querySelector('a[href*="/p/"]');
+                if (postLink) {
+                    postUrl = postLink.href;
+                } else {
+                    // 2. 현재 페이지 URL 사용 (포스트 상세 페이지인 경우)
+                    if (window.location.href.includes('/p/')) {
+                        postUrl = window.location.href;
+                    } else {
+                        // 3. article의 위치 기반 고유값 생성
+                        const rect = article.getBoundingClientRect();
+                        postUrl = 'post_' + Math.round(rect.top) + '_' + Math.round(rect.left) + '_' + Date.now();
+                    }
+                }
+                
+                // URL에서 shortcode 추출 (더 안정적인 키)
+                const shortcodeMatch = postUrl.match(/\/p\/([A-Za-z0-9_-]+)/);
+                const postKey = shortcodeMatch ? shortcodeMatch[1] : postUrl;
+                
+                console.log('Generated post key:', postKey, 'from URL:', postUrl);
+                return postKey;
+            }
+
             async function extractMediaFromPost(article) {
                 console.log('Extracting media from post');
+                
+                // 포스트 고유 키 생성
+                const postKey = generatePostKey(article);
+                
+                // 캐시에서 확인
+                try {
+                    const cachedData = Android.getCachedMedia(postKey);
+                    if (cachedData && cachedData !== 'null') {
+                        console.log('🎯 Found cached media for post:', postKey);
+                        return cachedData.split('||').map(item => {
+                            const parts = item.split('::', 2);
+                            return parts.length === 2 ? parts[0] + '::' + parts[1] : item;
+                        });
+                    }
+                } catch (e) {
+                    console.log('Cache check failed:', e);
+                }
                 
                 const mediaItems = [];
                 
@@ -753,6 +831,17 @@ private fun getInstagramScript(): String {
                 }
                 
                 console.log('Total media found: ' + mediaItems.length);
+                
+                // 수집 완료 후 캐시에 저장
+                if (mediaItems.length > 0) {
+                    try {
+                        Android.setCachedMedia(postKey, mediaItems.join('||'));
+                        console.log('💾 Media cached for post:', postKey);
+                    } catch (e) {
+                        console.log('Failed to cache media:', e);
+                    }
+                }
+                
                 return mediaItems;
             }
             
@@ -780,6 +869,28 @@ private fun getInstagramScript(): String {
                 let consecutiveFailures = 0;
                 const maxConsecutiveFailures = 8;
                 let hasCollectedInThisIteration = false;
+                
+                // 처음 한번만 다음 버튼을 찾기 (aria-label 속성 존재 + 오른쪽 위치)
+                let nextButton = null;
+                const buttons = container.querySelectorAll('button[aria-label]');
+                
+                for (let btn of buttons) {
+                    const rect = btn.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    
+                    // 오른쪽 절반에 있고 보이는 버튼 = 다음 버튼
+                    if (rect.left > containerRect.left + containerRect.width / 2 && 
+                        rect.width > 0 && rect.height > 0) {
+                        nextButton = btn;
+                        console.log('🎯 Found next button:', nextButton);
+                        break;
+                    }
+                }
+                
+                if (!nextButton) {
+                    console.log('❌ No next button found - single media');
+                    return mediaItems;
+                }
                 
                 while (currentIndex < maxAttempts && consecutiveFailures < maxConsecutiveFailures) {
                     try {
@@ -841,29 +952,9 @@ private fun getInstagramScript(): String {
                             consecutiveFailures++;
                         }
                         
-                        // 다음 버튼 찾기
-                        const nextButtons = container.querySelectorAll('button[aria-label]');
-                        let nextButton = null;
-                        
-                        for (let btn of nextButtons) {
-                            const ariaLabel = btn.getAttribute('aria-label');
-                            const rect = btn.getBoundingClientRect();
-                            const containerRect = container.getBoundingClientRect();
-                            
-//                            if (rect.left > containerRect.left + containerRect.width / 2 && 
-//                                rect.width > 0 && rect.height > 0 &&
-//                                (ariaLabel && (ariaLabel.includes('Next') || ariaLabel.includes('다음') || ariaLabel.includes('넘기')))) {
-
-
-                            if (rect.left > containerRect.left + containerRect.width / 2 && 
-                                rect.width > 0 && rect.height > 0 ) {
-                                nextButton = btn;
-                                break;
-                            }
-                        }
-                        
-                        if (!nextButton) {
-                            console.log('🏁 No more next button found - final collection');
+                        // 기존에 찾아둔 다음 버튼이 여전히 유효한지 체크
+                        if (!nextButton || !nextButton.offsetParent || nextButton.disabled) {
+                            console.log('🏁 Next button no longer available - final collection');
                             break;
                         }
                         

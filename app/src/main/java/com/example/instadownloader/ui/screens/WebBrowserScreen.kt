@@ -47,9 +47,19 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.DisposableEffect
 import java.lang.ref.WeakReference
 
-// 웹뷰 상태를 전역으로 관리하는 싱글톤
+// 웹뷰 상태를 전역으로 관리하는 싱글톤 (Compose State 사용)
 object WebViewManager {
     private var cachedWebView: WeakReference<WebView>? = null
+    
+    // 바텀시트 상태를 전역으로 관리 (Compose State 사용)
+    private val _showBottomSheet = mutableStateOf(false)
+    private val _mediaItems = mutableStateOf<List<InstagramMediaItem>>(emptyList())
+    private val _selectedItems = mutableStateOf<List<InstagramMediaItem>>(emptyList())
+    
+    // Compose에서 관찰 가능한 State 노출
+    val showBottomSheet: State<Boolean> = _showBottomSheet
+    val mediaItems: State<List<InstagramMediaItem>> = _mediaItems
+    val selectedItems: State<List<InstagramMediaItem>> = _selectedItems
     
     fun getCachedWebView(): WebView? = cachedWebView?.get()
     
@@ -60,6 +70,35 @@ object WebViewManager {
     fun clearCache() {
         cachedWebView?.clear()
         cachedWebView = null
+        // 상태도 초기화
+        _showBottomSheet.value = false
+        _mediaItems.value = emptyList()
+        _selectedItems.value = emptyList()
+    }
+    
+    // 바텀시트 상태 업데이트 메서드들
+    fun updateBottomSheetState(show: Boolean, media: List<InstagramMediaItem> = emptyList()) {
+        _showBottomSheet.value = show
+        if (media.isNotEmpty()) {
+            _mediaItems.value = media
+            _selectedItems.value = media
+        }
+        Log.d("WebView", "전역 상태 업데이트: showBottomSheet=$show, 미디어=${media.size}개")
+    }
+    
+    fun updateMediaSelection(selected: List<InstagramMediaItem>) {
+        _selectedItems.value = selected
+    }
+    
+    fun updateMediaItems(items: List<InstagramMediaItem>) {
+        _mediaItems.value = items
+        _selectedItems.value = items.map { media ->
+            _selectedItems.value.find { it.url == media.url } ?: media
+        }
+    }
+    
+    fun hideBottomSheet() {
+        _showBottomSheet.value = false
     }
 }
 
@@ -136,9 +175,11 @@ fun WebBrowserScreen() {
     var webView: WebView? by remember { mutableStateOf(cachedWebView) }
     var canGoBack by remember { mutableStateOf(cachedWebView?.canGoBack() ?: false) }
     var isLoading by remember { mutableStateOf(false) }
-    var showBottomSheet by remember { mutableStateOf(false) }
-    var mediaItems by remember { mutableStateOf<List<InstagramMediaItem>>(emptyList()) }
-    var selectedItems by remember { mutableStateOf<List<InstagramMediaItem>>(emptyList()) }
+    
+    // 전역 상태를 직접 관찰 (by 델리게이트 사용)
+    val showBottomSheetState by WebViewManager.showBottomSheet
+    val mediaItemsState by WebViewManager.mediaItems  
+    val selectedItemsState by WebViewManager.selectedItems
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -230,10 +271,8 @@ fun WebBrowserScreen() {
                             canGoBack = view?.canGoBack() ?: false
                             Log.d("WebView", "페이지 완료: $url, canGoBack: $canGoBack")
 
-                            // ✨ 추가된 부분 시작
                             // "X" 닫기 버튼 자동 클릭 스크립트 주입 (모든 페이지에서 실행)
                             view?.evaluateJavascript(getCloseButtonClickScript(), null)
-                            // ✨ 추가된 부분 끝
 
                             // 로그인 페이지인 경우 스크립트 주입하지 않음 (기존 로직 유지)
                             if (url?.contains("accounts/login") == false) {
@@ -259,16 +298,11 @@ fun WebBrowserScreen() {
                             Log.d("WebView", "🌐 URL 로딩: $url")
                             Log.d("WebView", "📨 요청 헤더: $headers")
 
-//                            // Instagram 도메인만 허용
-//                            if (url?.contains("instagram.com") == true || url?.contains("facebook.com") == true) {
-//                                Log.d("WebView", "✅ 허용된 도메인: $url")
-//                                return false // WebView에서 처리
-//                            }
-//
                             Log.w("WebView", "❌ 차단된 도메인: $url")
                             return super.shouldOverrideUrlLoading(view, request)
                         }
 
+                        @Suppress("DEPRECATION")
                         override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                             super.onReceivedError(view, errorCode, description, failingUrl)
                             Log.e("WebView", "에러 발생: $description ($errorCode) - $failingUrl")
@@ -313,15 +347,13 @@ fun WebBrowserScreen() {
                         WebViewInterface(
                             onMediaFound = { foundMedia ->
                                 Log.d("WebView", "JavaScript onMediaFound 호출됨: ${foundMedia.size}개 미디어")
-                                mediaItems = foundMedia
-                                selectedItems = foundMedia
-                                showBottomSheet = true
+                                // 전역 상태만 업데이트 (로컬 상태는 자동 동기화)
+                                WebViewManager.updateBottomSheetState(true, foundMedia)
+                                Log.d("WebView", "onMediaFound - 전역 상태 업데이트 완료")
                             },
                             onMediaUpdate = { updatedMedia ->
-                                mediaItems = updatedMedia
-                                selectedItems = updatedMedia.map { media ->
-                                    selectedItems.find { it.url == media.url } ?: media
-                                }
+                                // 전역 상태만 업데이트
+                                WebViewManager.updateMediaItems(updatedMedia)
                             },
                             onBlobProcessing = { filename, status ->
                                 when {
@@ -383,15 +415,11 @@ fun WebBrowserScreen() {
                         // Mixed Content 허용 (HTTPS + HTTP)
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
 
-                        // 🔧 중요: 최신 모바일 User-Agent 사용 (2025년 호환성)
-//                        userAgentString = "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                         // ✅ Instagram 웹뷰 차단 우회 (wv 토큰 완전 제거)
                         val defaultUA = WebSettings.getDefaultUserAgent(context)
                         userAgentString = defaultUA
                             .replace("; wv", "") // WebView 토큰 제거
                             .replace("Version/4.0", "Version/4.0 Chrome/131.0.0.0") // 브라우저 시그니처 강화
-
-
 
                         // 🔧 최적화된 캐시 모드 설정 (인스타그램용)
                         cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
@@ -455,19 +483,22 @@ fun WebBrowserScreen() {
         )
     }
 
-    // 바텀 시트
-    if (showBottomSheet) {
+    // 바텀 시트 (전역 상태 기반)
+    if (showBottomSheetState) {
         ModalBottomSheet(
             onDismissRequest = {
-                showBottomSheet = false
+                WebViewManager.hideBottomSheet()
+                Log.d("WebView", "바텀시트 닫기")
             },
             sheetState = bottomSheetState,
             modifier = Modifier.fillMaxHeight()
         ) {
             InstagramMediaBottomSheet(
-                mediaItems = mediaItems,
-                selectedItems = selectedItems,
-                onSelectionChange = { selectedItems = it },
+                mediaItems = mediaItemsState,
+                selectedItems = selectedItemsState,
+                onSelectionChange = { 
+                    WebViewManager.updateMediaSelection(it)
+                },
                 onDownload = { selectedUrls ->
                     scope.launch {
                         try {
@@ -495,7 +526,8 @@ fun WebBrowserScreen() {
                                 }
                             )
 
-                            showBottomSheet = false
+                            WebViewManager.hideBottomSheet()
+                            Log.d("WebView", "다운로드 완료 후 바텀시트 닫기")
                         } catch (e: Exception) {
                             Toast.makeText(context, "오류: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
@@ -506,7 +538,6 @@ fun WebBrowserScreen() {
     }
 }
 
-// ✨ 추가된 부분 시작
 // 'X' 닫기 버튼 자동 클릭 스크립트
 private fun getCloseButtonClickScript(): String {
     return """
@@ -591,8 +622,6 @@ private fun getCloseButtonClickScript(): String {
         })();
     """.trimIndent()
 }
-// ✨ 추가된 부분 끝
-
 
 // Instagram 스크립트를 별도 함수로 분리 (기존 코드 원본 유지)
 private fun getInstagramScript(): String {

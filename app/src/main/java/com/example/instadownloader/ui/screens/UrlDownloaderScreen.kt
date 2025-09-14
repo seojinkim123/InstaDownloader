@@ -99,22 +99,13 @@ fun UrlDownloaderScreen() {
                             val postId = extractPostIdFromUrl(urlText)
                             println("Extracted Post ID: $postId from URL: $urlText")
                             if (postId != null) {
-                                val urls = withContext(Dispatchers.IO) {
+                                val items = withContext(Dispatchers.IO) {
                                     InstagramScraper.scrapePostMedia(postId, "high")
-                                }
-                                
-                                // URL 리스트를 MediaItem 리스트로 변환
-                                val items: List<MediaItem> = urls.mapIndexed { index: Int, url: String ->
-                                    MediaItem(
-                                        url = url,
-                                        type = url.getMediaType(),
-                                        thumbnail = url
-                                    )
                                 }
                                 
                                 withContext(Dispatchers.Main) {
                                     mediaItems = items
-                                    selectedMediaItems = emptySet()
+                                    selectedMediaItems = items.indices.toSet() // 전체 선택을 디폴트로 설정
                                     isLoading = false
                                     if (items.isNotEmpty()) {
                                         showMediaDialog = true
@@ -218,11 +209,13 @@ fun UrlDownloaderScreen() {
                     val urls = selectedItems.map { it.url }
                     val isVideoList = selectedItems.map { it.type == MediaType.VIDEO }
                     val originalUrls = List(selectedItems.size) { urlText } // 모든 미디어의 원본 Instagram URL
+                    val thumbnailUrls = selectedItems.map { if (it.type == MediaType.VIDEO) it.thumbnail else null }
                     
                     downloader.downloadMediaList(
                         urls,
                         isVideoList,
                         originalUrls,
+                        thumbnailUrls,
                         onProgress = { current, _ ->
                             downloadProgress = current
                         }
@@ -260,7 +253,40 @@ private fun MediaSelectionDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {
-                Text("다운로드할 미디어를 선택하세요 (${selectedItems.size}/${mediaItems.size})")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "다운로드할 미디어를 선택하세요 (${selectedItems.size}/${mediaItems.size})",
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    TextButton(
+                        onClick = {
+                            if (selectedItems.size == mediaItems.size) {
+                                // 전체 해제
+                                for (i in mediaItems.indices) {
+                                    onSelectionChange(i, false)
+                                }
+                            } else {
+                                // 전체 선택
+                                for (i in mediaItems.indices) {
+                                    if (!selectedItems.contains(i)) {
+                                        onSelectionChange(i, true)
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isDownloading
+                    ) {
+                        Text(
+                            text = if (selectedItems.size == mediaItems.size) "전체 해제" else "전체 선택",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
                 
                 if (isDownloading) {
                     Spacer(modifier = Modifier.height(8.dp))

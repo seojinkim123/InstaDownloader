@@ -4,6 +4,8 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import org.json.JSONObject
 import java.net.URLEncoder
+import com.example.instadownloader.data.model.MediaItem
+import com.example.instadownloader.data.model.MediaType
 
 object
 InstagramScraper {
@@ -11,7 +13,7 @@ InstagramScraper {
     private const val INSTAGRAM_URL = "https://www.instagram.com/graphql/query"
     private val client = OkHttpClient()
 
-    fun scrapePostMedia(shortcodeOrUrl: String, quality: String = "high"): List<String> {
+    fun scrapePostMedia(shortcodeOrUrl: String, quality: String = "high"): List<MediaItem> {
         // shortcode 추출
         val shortcode = if (shortcodeOrUrl.contains("http")) {
             shortcodeOrUrl.split("/p/").last().split("/")[0]
@@ -67,12 +69,12 @@ InstagramScraper {
                 throw Exception("로그인이 필요한 게시물 입니다")
             }
 
-            return extractMediaUrls(mediaJson, quality)
+            return extractMediaItems(mediaJson, quality)
         }
     }
 
-    private fun extractMediaUrls(postData: JSONObject, quality: String): List<String> {
-        val urls = mutableListOf<String>()
+    private fun extractMediaItems(postData: JSONObject, quality: String): List<MediaItem> {
+        val mediaItems = mutableListOf<MediaItem>()
         val qualityIndex = mapOf("low" to 0, "medium" to 1, "high" to 2)
         val index = qualityIndex[quality] ?: 2
 
@@ -87,32 +89,58 @@ InstagramScraper {
             for (i in 0 until children.length()) {
                 val node = children.getJSONObject(i).getJSONObject("node")
                 if (node.getBoolean("is_video")) {
-                    urls.add(node.getString("video_url"))
+                    // 동영상: video_url을 url로, display_url을 thumbnail로 사용
+                    val videoUrl = node.getString("video_url")
+                    val thumbnailUrl = node.getString("display_url")
+                    mediaItems.add(MediaItem(
+                        url = videoUrl,
+                        type = MediaType.VIDEO,
+                        thumbnail = thumbnailUrl
+                    ))
                 } else {
+                    // 이미지: display_resources에서 고해상도 이미지 URL 추출
                     val displayResources = node.getJSONArray("display_resources")
                     val resource = if (displayResources.length() > index) {
                         displayResources.getJSONObject(index)
                     } else {
                         displayResources.getJSONObject(displayResources.length() - 1)
                     }
-                    urls.add(resource.getString("src"))
+                    val imageUrl = resource.getString("src")
+                    mediaItems.add(MediaItem(
+                        url = imageUrl,
+                        type = MediaType.IMAGE,
+                        thumbnail = imageUrl
+                    ))
                 }
             }
         } else {
             // 단일 미디어
             if (postData.getBoolean("is_video")) {
-                urls.add(postData.getString("video_url"))
+                // 동영상: video_url을 url로, display_url을 thumbnail로 사용
+                val videoUrl = postData.getString("video_url")
+                val thumbnailUrl = postData.getString("display_url")
+                mediaItems.add(MediaItem(
+                    url = videoUrl,
+                    type = MediaType.VIDEO,
+                    thumbnail = thumbnailUrl
+                ))
             } else {
+                // 이미지: display_resources에서 고해상도 이미지 URL 추출
                 val displayResources = postData.getJSONArray("display_resources")
                 val resource = if (displayResources.length() > index) {
                     displayResources.getJSONObject(index)
                 } else {
                     displayResources.getJSONObject(displayResources.length() - 1)
                 }
-                urls.add(resource.getString("src"))
+                val imageUrl = resource.getString("src")
+                mediaItems.add(MediaItem(
+                    url = imageUrl,
+                    type = MediaType.IMAGE,
+                    thumbnail = imageUrl
+                ))
             }
         }
 
-        return urls
+        return mediaItems
     }
 }

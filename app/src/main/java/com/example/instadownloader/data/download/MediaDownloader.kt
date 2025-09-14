@@ -27,6 +27,7 @@ class MediaDownloader(private val context: Context) {
         filename: String,
         isVideo: Boolean = false,
         originalUrl: String = url,
+        thumbnailUrl: String? = null,
         onProgress: (Int) -> Unit = {}
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -91,6 +92,19 @@ class MediaDownloader(private val context: Context) {
                 contentResolver.update(uri, contentValues, null, null)
             }
             
+            // 동영상의 경우 썸네일 다운로드
+            var thumbnailPath: String? = null
+            if (isVideo && thumbnailUrl != null) {
+                try {
+                    val thumbnailFilename = generateFilename(thumbnailUrl, false) // 썸네일은 이미지
+                    val thumbnailResult = downloadThumbnail(thumbnailUrl, thumbnailFilename)
+                    thumbnailPath = thumbnailResult.getOrNull()
+                } catch (e: Exception) {
+                    // 썸네일 다운로드 실패해도 메인 비디오는 저장
+                    println("썸네일 다운로드 실패: ${e.message}")
+                }
+            }
+
             // 데이터베이스에 메타데이터 저장
             val mediaEntity = DownloadedMediaEntity(
                 id = UUID.randomUUID().toString(),
@@ -100,7 +114,7 @@ class MediaDownloader(private val context: Context) {
                 downloadDate = System.currentTimeMillis(),
                 mediaType = if (isVideo) "video" else "image",
                 fileSize = contentLength,
-                thumbnailPath = uri.toString() // 이미지의 경우 자기 자신이 썸네일
+                thumbnailPath = if (isVideo) thumbnailPath else uri.toString()
             )
             
             mediaDao.insertMedia(mediaEntity)
@@ -119,10 +133,64 @@ class MediaDownloader(private val context: Context) {
         return "insta_${timestamp}_${urlHash}.$extension"
     }
     
+    private suspend fun downloadThumbnail(
+        thumbnailUrl: String,
+        filename: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url(thumbnailUrl)
+                .build()
+            
+            val response = client.newCall(request).execute()
+            
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(Exception("Thumbnail download failed: ${response.code}"))
+            }
+            
+            val body = response.body ?: return@withContext Result.failure(Exception("Empty response body"))
+            
+            // 썸네일을 이미지로 저장 (Pictures/InstaDownloader/thumbnails)
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "thumb_$filename")
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, 
+                        Environment.DIRECTORY_PICTURES + "/InstaDownloader/thumbnails")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+            }
+            
+            val contentResolver = context.contentResolver
+            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                ?: return@withContext Result.failure(Exception("Failed to create thumbnail MediaStore entry"))
+            
+            contentResolver.openOutputStream(uri)?.use { outputStream ->
+                body.byteStream().use { inputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+            
+            // Android Q 이상에서 IS_PENDING 플래그 제거
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                contentResolver.update(uri, contentValues, null, null)
+            }
+            
+            Result.success(uri.toString())
+            
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
     suspend fun downloadMediaList(
         mediaUrls: List<String>,
         isVideoList: List<Boolean>,
         originalUrls: List<String> = mediaUrls,
+        thumbnailUrls: List<String?> = List(mediaUrls.size) { null },
         onProgress: (Int, Int) -> Unit = { _, _ -> }, // current, total
         onItemComplete: (Int, String) -> Unit = { _, _ -> }
     ): Result<List<String>> = withContext(Dispatchers.IO) {
@@ -132,9 +200,10 @@ class MediaDownloader(private val context: Context) {
             mediaUrls.forEachIndexed { index, url ->
                 val isVideo = isVideoList.getOrElse(index) { false }
                 val originalUrl = originalUrls.getOrElse(index) { url }
+                val thumbnailUrl = thumbnailUrls.getOrElse(index) { null }
                 val filename = generateFilename(url, isVideo)
                 
-                val result = downloadMedia(url, filename, isVideo, originalUrl) { itemProgress ->
+                val result = downloadMedia(url, filename, isVideo, originalUrl, thumbnailUrl) { itemProgress ->
                     // 개별 파일 진행률을 전체 진행률로 변환
                     val totalProgress = (index * 100 + itemProgress) / mediaUrls.size
                     onProgress(totalProgress, 100)

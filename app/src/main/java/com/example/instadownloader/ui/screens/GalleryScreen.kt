@@ -193,7 +193,7 @@ fun GalleryScreen() {
                     modifier = Modifier.padding(16.dp)
                 ) {
                     AsyncImage(
-                        model = media.uri,
+                        model = if (media.mediaType == "video") media.thumbnailUri else media.uri,
                         contentDescription = media.fileName,
                         modifier = Modifier
                             .fillMaxWidth()

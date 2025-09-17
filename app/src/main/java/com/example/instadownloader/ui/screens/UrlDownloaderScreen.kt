@@ -104,6 +104,21 @@ fun UrlDownloaderScreen() {
                 imeAction = ImeAction.Done
             ),
             singleLine = true,
+            leadingIcon = if (urlText.isNotBlank()) {
+                {
+                    IconButton(
+                        onClick = {
+                            urlText = ""
+                        }
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.eraser_svgrepo_com),
+                            contentDescription = "Clear",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            } else null,
             trailingIcon = {
                 IconButton(
                     onClick = {
@@ -115,7 +130,8 @@ fun UrlDownloaderScreen() {
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.paste_svgrepo_com),
-                        contentDescription = "Paste"
+                        contentDescription = "Paste",
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -199,7 +215,7 @@ fun UrlDownloaderScreen() {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(280.dp),
+                    .height(170.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
@@ -482,13 +498,7 @@ private fun InstructionSection() {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(16.dp)
     ) {
-        Text(
-            text = "Enter Instagram Post URL and press Extract Media",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        
+
         Text(
             text = "How to get Instagram URL:",
             style = MaterialTheme.typography.bodySmall,

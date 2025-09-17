@@ -1,11 +1,14 @@
 package com.example.instadownloader.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.ui.res.painterResource
 import com.example.instadownloader.R
@@ -54,8 +57,15 @@ fun UrlDownloaderScreen() {
     ) {
         // 헤더
         Text(
-            text = "Instagram URL Downloader",
-            style = MaterialTheme.typography.headlineMedium,
+            text = "StarSaver",
+            style = MaterialTheme.typography.headlineLarge,
+            modifier = Modifier.padding(bottom = 8.dp),
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = "Instagram Media Downloader",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 16.dp)
         )
         
@@ -63,7 +73,7 @@ fun UrlDownloaderScreen() {
             value = urlText,
             onValueChange = { urlText = it },
             label = { Text("Enter Instagram URL") },
-            placeholder = { Text("https://www.instagram.com/p/...") },
+            placeholder = { Text("Paste post URL") },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),

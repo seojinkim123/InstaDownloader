@@ -30,9 +30,9 @@ import android.webkit.WebView
 import com.example.instadownloader.ui.theme.InstaDownloaderTheme
 
 sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    object UrlDownloader : Screen("url_downloader", "다운로더", Icons.Default.Home)
-    object WebBrowser : Screen("web_browser", "브라우저", Icons.Default.Search)
-    object Gallery : Screen("gallery", "갤러리", Icons.Default.Settings)
+    object UrlDownloader : Screen("url_downloader", "Downloader", Icons.Default.Home)
+    object WebBrowser : Screen("web_browser", "Browser", Icons.Default.Search)
+    object Gallery : Screen("gallery", "Gallery", Icons.Default.Settings)
 }
 
 class MainActivity : ComponentActivity() {

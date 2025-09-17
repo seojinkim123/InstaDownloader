@@ -54,7 +54,7 @@ fun UrlDownloaderScreen() {
     ) {
         // 헤더
         Text(
-            text = "Instagram URL 다운로더",
+            text = "Instagram URL Downloader",
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
@@ -62,7 +62,7 @@ fun UrlDownloaderScreen() {
         OutlinedTextField(
             value = urlText,
             onValueChange = { urlText = it },
-            label = { Text("Instagram URL을 입력하세요") },
+            label = { Text("Enter Instagram URL") },
             placeholder = { Text("https://www.instagram.com/p/...") },
             modifier = Modifier
                 .fillMaxWidth()
@@ -81,7 +81,7 @@ fun UrlDownloaderScreen() {
                         }
                     }
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "붙여넣기")
+                    Icon(Icons.Default.Add, contentDescription = "Paste")
                 }
             }
         )
@@ -113,13 +113,13 @@ fun UrlDownloaderScreen() {
                                 }
                             } else {
                                 withContext(Dispatchers.Main) {
-                                    errorMessage = "올바른 Instagram URL을 입력해주세요"
+                                    errorMessage = "Please enter a valid Instagram URL"
                                     isLoading = false
                                 }
                             }
                         } catch (e: Exception) {
                             withContext(Dispatchers.Main) {
-                                errorMessage = e.message ?: "미디어 추출 중 오류가 발생했습니다"
+                                errorMessage = e.message ?: "An error occurred while extracting media"
                                 isLoading = false
                             }
                         }
@@ -138,7 +138,7 @@ fun UrlDownloaderScreen() {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Text(if (isLoading) "추출 중..." else "미디어 추출")
+            Text(if (isLoading) "Extracting..." else "Extract Media")
         }
         
         // 에러 메시지 표시
@@ -152,7 +152,7 @@ fun UrlDownloaderScreen() {
                 )
             ) {
                 Text(
-                    text = "오류: $error",
+                    text = "Error: $error",
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -174,7 +174,7 @@ fun UrlDownloaderScreen() {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Instagram URL을 입력하고 미디어 추출을 눌러주세요",
+                        text = "Enter Instagram URL and press Extract Media",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -234,7 +234,7 @@ fun UrlDownloaderScreen() {
                             isDownloading = false
                             // 실패 시에도 메모리 보호 해제
                             WebViewManager.releaseWebViewProtection()
-                            ToastUtils.showDownloadError(context, error.message ?: "알 수 없는 오류")
+                            ToastUtils.showDownloadError(context, error.message ?: "Unknown error")
                         }
                     )
                 }
@@ -266,7 +266,7 @@ private fun MediaSelectionDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "다운로드할 미디어를 선택하세요 (${selectedItems.size}/${mediaItems.size})",
+                        text = "Select media to download (${selectedItems.size}/${mediaItems.size})",
                         modifier = Modifier.weight(1f)
                     )
                     
@@ -289,7 +289,7 @@ private fun MediaSelectionDialog(
                         enabled = !isDownloading
                     ) {
                         Text(
-                            text = if (selectedItems.size == mediaItems.size) "전체 해제" else "전체 선택",
+                            text = if (selectedItems.size == mediaItems.size) "Deselect All" else "Select All",
                             style = MaterialTheme.typography.labelMedium
                         )
                     }
@@ -302,7 +302,7 @@ private fun MediaSelectionDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        text = "다운로드 중... $downloadProgress%",
+                        text = "Downloading... $downloadProgress%",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -341,7 +341,7 @@ private fun MediaSelectionDialog(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("다운로드 (${selectedItems.size})")
+                    Text("Download (${selectedItems.size})")
                 }
             }
         },
@@ -350,7 +350,7 @@ private fun MediaSelectionDialog(
                 onClick = onDismiss,
                 enabled = !isDownloading
             ) {
-                Text("취소")
+                Text("Cancel")
             }
         }
     )
@@ -382,7 +382,7 @@ private fun MediaSelectableCard(
         Box {
             AsyncImage(
                 model = mediaItem.thumbnail ?: mediaItem.url,
-                contentDescription = "미디어",
+                contentDescription = "Media",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
@@ -411,7 +411,7 @@ private fun MediaSelectableCard(
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
                 ) {
                     Text(
-                        text = "동영상",
+                        text = "Video",
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall
                     )

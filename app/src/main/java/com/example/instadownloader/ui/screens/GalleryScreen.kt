@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun GalleryScreen() {
     var showFilter by remember { mutableStateOf(false) }
-    var selectedFilter by remember { mutableStateOf("전체") }
+    var selectedFilter by remember { mutableStateOf("All") }
     var mediaItems by remember { mutableStateOf<List<GalleryMediaItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedMedia by remember { mutableStateOf<GalleryMediaItem?>(null) }
@@ -38,8 +38,8 @@ fun GalleryScreen() {
     LaunchedEffect(selectedFilter) {
         isLoading = true
         mediaItems = when (selectedFilter) {
-            "이미지" -> repository.getMediaByType("image")
-            "동영상" -> repository.getMediaByType("video")
+            "Images" -> repository.getMediaByType("image")
+            "Videos" -> repository.getMediaByType("video")
             else -> repository.getAllMedia()
         }
         isLoading = false
@@ -57,20 +57,20 @@ fun GalleryScreen() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "다운로드 갤러리",
+                text = "Download Gallery",
                 style = MaterialTheme.typography.headlineMedium
             )
             
             IconButton(
                 onClick = { showFilter = true }
             ) {
-                Icon(Icons.Default.MoreVert, contentDescription = "필터")
+                Icon(Icons.Default.MoreVert, contentDescription = "Filter")
             }
         }
         
         // 미디어 개수 표시
         Text(
-            text = "총 ${mediaItems.size}개 항목",
+            text = "Total ${mediaItems.size} items",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -94,11 +94,11 @@ fun GalleryScreen() {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "다운로드한 미디어가 없습니다",
+                        text = "No downloaded media",
                         style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = "URL 다운로더나 브라우저에서 미디어를 다운로드해보세요",
+                        text = "Try downloading media from URL Downloader or Browser",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp)
@@ -124,8 +124,8 @@ fun GalleryScreen() {
                                 repository.deleteMedia(media)
                                 // 삭제 후 목록 새로고침
                                 mediaItems = when (selectedFilter) {
-                                    "이미지" -> repository.getMediaByType("image")
-                                    "동영상" -> repository.getMediaByType("video")
+                                    "Images" -> repository.getMediaByType("image")
+                                    "Videos" -> repository.getMediaByType("video")
                                     else -> repository.getAllMedia()
                                 }
                             }
@@ -140,10 +140,10 @@ fun GalleryScreen() {
     if (showFilter) {
         AlertDialog(
             onDismissRequest = { showFilter = false },
-            title = { Text("필터 선택") },
+            title = { Text("Select Filter") },
             text = {
                 Column {
-                    listOf("전체", "이미지", "동영상").forEach { filter ->
+                    listOf("All", "Images", "Videos").forEach { filter ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -166,14 +166,14 @@ fun GalleryScreen() {
                 TextButton(
                     onClick = { showFilter = false }
                 ) {
-                    Text("적용")
+                    Text("Apply")
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showFilter = false }
                 ) {
-                    Text("취소")
+                    Text("Cancel")
                 }
             }
         )
@@ -209,7 +209,7 @@ fun GalleryScreen() {
                     )
                     
                     Text(
-                        text = if (media.mediaType == "video") "동영상" else "이미지",
+                        text = if (media.mediaType == "video") "Video" else "Image",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -223,7 +223,7 @@ fun GalleryScreen() {
                         TextButton(
                             onClick = { selectedMedia = null }
                         ) {
-                            Text("닫기")
+                            Text("Close")
                         }
                     }
                 }

@@ -14,14 +14,14 @@ object ToastUtils {
     
     fun showDownloadComplete(context: Context, count: Int) {
         val message = if (count == 1) {
-            "미디어 1개가 갤러리에 저장되었습니다"
+            "1 media saved to gallery"
         } else {
-            "미디어 ${count}개가 갤러리에 저장되었습니다"
+            "$count media saved to gallery"
         }
         showLong(context, message)
     }
     
     fun showDownloadError(context: Context, error: String) {
-        showLong(context, "다운로드 실패: $error")
+        showLong(context, "Download failed: $error")
     }
 }

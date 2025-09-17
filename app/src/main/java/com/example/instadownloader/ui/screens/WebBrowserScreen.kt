@@ -411,11 +411,11 @@ fun WebBrowserScreen() {
                             onBlobProcessing = { filename, status ->
                                 when {
                                     status == "start" -> {
-                                        Toast.makeText(context, "비디오 처리 중: $filename", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Processing video: $filename", Toast.LENGTH_SHORT).show()
                                     }
                                     status.startsWith("error::") -> {
                                         val errorMsg = status.removePrefix("error::")
-                                        Toast.makeText(context, "처리 실패: $errorMsg", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "Processing failed: $errorMsg", Toast.LENGTH_LONG).show()
                                     }
                                 }
                             },
@@ -427,14 +427,14 @@ fun WebBrowserScreen() {
 
                                         result.fold(
                                             onSuccess = { savedUri ->
-                                                Toast.makeText(context, "비디오 다운로드 완료: $filename", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "Video download completed: $filename", Toast.LENGTH_SHORT).show()
                                             },
                                             onFailure = { error ->
-                                                Toast.makeText(context, "다운로드 실패: ${error.message}", Toast.LENGTH_LONG).show()
+                                                Toast.makeText(context, "Download failed: ${error.message}", Toast.LENGTH_LONG).show()
                                             }
                                         )
                                     } catch (e: Exception) {
-                                        Toast.makeText(context, "다운로드 오류: ${e.message}", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "Download error: ${e.message}", Toast.LENGTH_LONG).show()
                                     }
                                 }
                             }
@@ -572,17 +572,17 @@ fun WebBrowserScreen() {
 
                             result.fold(
                                 onSuccess = { savedUris ->
-                                    Toast.makeText(context, "다운로드 완료: ${savedUris.size}개 파일", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Download completed: ${savedUris.size} files", Toast.LENGTH_SHORT).show()
                                 },
                                 onFailure = { error ->
-                                    Toast.makeText(context, "다운로드 실패: ${error.message}", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Download failed: ${error.message}", Toast.LENGTH_SHORT).show()
                                 }
                             )
 
                             WebViewManager.hideBottomSheet()
                             Log.d("WebView", "다운로드 완료 후 바텀시트 닫기")
                         } catch (e: Exception) {
-                            Toast.makeText(context, "오류: ${e.message}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -1035,7 +1035,7 @@ fun InstagramMediaBottomSheet(
             .padding(16.dp)
     ) {
         Text(
-            text = "미디어 선택",
+            text = "Select Media",
             style = MaterialTheme.typography.headlineSmall,
             modifier = Modifier.padding(bottom = 16.dp)
         )
@@ -1050,7 +1050,7 @@ fun InstagramMediaBottomSheet(
                     onSelectionChange(mediaItems.map { it.copy(isSelected = false) })
                 }
             ) {
-                Text("전체 해제")
+                Text("Deselect All")
             }
         }
 
@@ -1101,7 +1101,7 @@ fun InstagramMediaBottomSheet(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "수집 중...",
+                                    text = "Collecting...",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1151,7 +1151,7 @@ fun InstagramMediaBottomSheet(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "비디오",
+                                text = "Video",
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelSmall
                             )
@@ -1174,7 +1174,7 @@ fun InstagramMediaBottomSheet(
             modifier = Modifier.fillMaxWidth(),
             enabled = selectedItems.any { it.isSelected }
         ) {
-            Text("다운로드 (${selectedItems.count { it.isSelected }}개)")
+            Text("Download (${selectedItems.count { it.isSelected }})")
         }
 
         Spacer(modifier = Modifier.height(16.dp))

@@ -202,6 +202,9 @@ fun UrlDownloaderScreen() {
                     isDownloading = true
                     downloadProgress = 0
                     
+                    // WebView 메모리 보호 시작
+                    WebViewManager.protectWebViewFromGC()
+                    
                     val selectedItems = selectedMediaItems.map { index ->
                         mediaItems[index]
                     }
@@ -223,10 +226,14 @@ fun UrlDownloaderScreen() {
                         onSuccess = { savedUris ->
                             isDownloading = false
                             showMediaDialog = false
+                            // WebView 메모리 보호 해제
+                            WebViewManager.releaseWebViewProtection()
                             ToastUtils.showDownloadComplete(context, savedUris.size)
                         },
                         onFailure = { error ->
                             isDownloading = false
+                            // 실패 시에도 메모리 보호 해제
+                            WebViewManager.releaseWebViewProtection()
                             ToastUtils.showDownloadError(context, error.message ?: "알 수 없는 오류")
                         }
                     )

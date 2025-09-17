@@ -50,6 +50,7 @@ import java.lang.ref.WeakReference
 // 웹뷰 상태를 전역으로 관리하는 싱글톤 (Compose State 사용)
 object WebViewManager {
     private var cachedWebView: WeakReference<WebView>? = null
+    private var protectedWebView: WebView? = null // 강한 참조로 보호
     
     // 바텀시트 상태를 전역으로 관리 (Compose State 사용)
     private val _showBottomSheet = mutableStateOf(false)
@@ -64,15 +65,34 @@ object WebViewManager {
     val mediaItems: State<List<InstagramMediaItem>> = _mediaItems
     val selectedItems: State<List<InstagramMediaItem>> = _selectedItems
     
-    fun getCachedWebView(): WebView? = cachedWebView?.get()
+    fun getCachedWebView(): WebView? = protectedWebView ?: cachedWebView?.get()
     
     fun setCachedWebView(webView: WebView) {
         cachedWebView = WeakReference(webView)
+        if (protectedWebView == null) {
+            protectedWebView = webView
+        }
+    }
+    
+    // 다운로드 중 WebView를 강한 참조로 보호
+    fun protectWebViewFromGC() {
+        val webView = cachedWebView?.get()
+        if (webView != null) {
+            protectedWebView = webView
+            Log.d("WebView", "WebView 메모리 보호 활성화")
+        }
+    }
+    
+    // 다운로드 완료 후 보호 해제
+    fun releaseWebViewProtection() {
+        protectedWebView = null
+        Log.d("WebView", "WebView 메모리 보호 해제")
     }
     
     fun clearCache() {
         cachedWebView?.clear()
         cachedWebView = null
+        protectedWebView = null
         // 상태도 초기화
         _showBottomSheet.value = false
         _mediaItems.value = emptyList()

@@ -9,16 +9,16 @@ import com.example.instadownloader.data.database.AppDatabase
 import com.example.instadownloader.data.database.DownloadedMediaEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
 import android.util.Base64
+import com.example.instadownloader.network.HttpClientManager
 
 class MediaDownloader(private val context: Context) {
-    private val client = OkHttpClient()
+    private val client = HttpClientManager.client
     private val database = AppDatabase.getDatabase(context)
     private val mediaDao = database.downloadedMediaDao()
     
@@ -69,7 +69,8 @@ class MediaDownloader(private val context: Context) {
             
             contentResolver.openOutputStream(uri)?.use { outputStream ->
                 body.byteStream().use { inputStream ->
-                    val buffer = ByteArray(8192)
+                    // 큰 버퍼로 I/O 성능 향상 및 메모리 압박 감소
+                    val buffer = ByteArray(32768) // 32KB
                     var bytesRead: Int
                     var totalBytesRead = 0L
                     
@@ -80,6 +81,11 @@ class MediaDownloader(private val context: Context) {
                         if (contentLength > 0) {
                             val progress = (totalBytesRead * 100 / contentLength).toInt()
                             onProgress(progress)
+                        }
+                        
+                        // 메모리 부족 시 강제 GC (선택적)
+                        if (totalBytesRead % (1024 * 1024) == 0L) { // 1MB마다
+                            System.gc()
                         }
                     }
                 }

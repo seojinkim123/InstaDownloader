@@ -264,7 +264,7 @@ private fun GalleryMediaCard(
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
                 ) {
                     Text(
-                        text = "동영상",
+                        text = "Video",
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall
                     )
@@ -276,11 +276,11 @@ private fun GalleryMediaCard(
                 onClick = { showDeleteDialog = true },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(4.dp)
+                    .padding(2.dp)
             ) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "삭제",
+                    contentDescription = "Delete",
                     tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .background(
@@ -297,8 +297,8 @@ private fun GalleryMediaCard(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("미디어 삭제") },
-            text = { Text("이 미디어를 삭제하시겠습니까?\n갤러리에서도 함께 삭제됩니다.") },
+            title = { Text("Delete Media") },
+            text = { Text("Are you sure you want to delete this media?\nIt will also be removed from your gallery.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -306,14 +306,14 @@ private fun GalleryMediaCard(
                         onDelete()
                     }
                 ) {
-                    Text("삭제")
+                    Text("Delete")
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showDeleteDialog = false }
                 ) {
-                    Text("취소")
+                    Text("Cancel")
                 }
             }
         )

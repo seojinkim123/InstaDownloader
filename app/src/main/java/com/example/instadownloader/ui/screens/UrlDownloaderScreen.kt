@@ -2,6 +2,10 @@ package com.example.instadownloader.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -43,6 +47,7 @@ fun UrlDownloaderScreen() {
     var selectedMediaItems by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableStateOf(0) }
+    var showHelpDialog by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -56,12 +61,29 @@ fun UrlDownloaderScreen() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 헤더
-        Text(
-            text = "StarSaver",
-            style = MaterialTheme.typography.headlineLarge,
-            modifier = Modifier.padding(bottom = 8.dp),
-            color = MaterialTheme.colorScheme.primary
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        ) {
+            Text(
+                text = "StarSaver",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.align(Alignment.Center)
+            )
+            IconButton(
+                onClick = { showHelpDialog = true },
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.question_circle_svgrepo_com),
+                    contentDescription = "Help",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         Text(
             text = "Instagram Media Downloader",
             style = MaterialTheme.typography.bodyMedium,
@@ -250,6 +272,30 @@ fun UrlDownloaderScreen() {
             },
             onDismiss = {
                 showMediaDialog = false
+            }
+        )
+    }
+    
+    // 도움말 다이얼로그
+    if (showHelpDialog) {
+        AlertDialog(
+            onDismissRequest = { showHelpDialog = false },
+            title = { Text("Important Information") },
+            text = {
+                Column {
+                    Text("1. Please note that you can only log in with your Instagram account within the in-app browser (Facebook login is not supported).")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("2. You can download posts from private accounts or those with age restrictions after logging in within the in-app browser.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("3. If you make too many requests in a short period, your access may be temporarily limited.")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showHelpDialog = false }
+                ) {
+                    Text("OK")
+                }
             }
         )
     }

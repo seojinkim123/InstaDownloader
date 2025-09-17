@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -228,6 +229,7 @@ fun WebBrowserScreen() {
     var webView: WebView? by remember { mutableStateOf(cachedWebView) }
     var canGoBack by remember { mutableStateOf(cachedWebView?.canGoBack() ?: false) }
     var isLoading by remember { mutableStateOf(false) }
+    var showHelpDialog by remember { mutableStateOf(false) }
     
     // 전역 상태를 직접 관찰 (by 델리게이트 사용)
     val showBottomSheetState by WebViewManager.showBottomSheet
@@ -272,19 +274,29 @@ fun WebBrowserScreen() {
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        // 간소화된 상단바 (새로고침 버튼만)
+        // 간소화된 상단바 (새로고침 및 도움말 버튼)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight(),
             contentAlignment = Alignment.CenterEnd
         ) {
-            IconButton(
-                onClick = {
-                    webView?.reload()
+            Row {
+                IconButton(
+                    onClick = {
+                        showHelpDialog = true
+                    }
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = "도움말")
                 }
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = "새로고침")
+                
+                IconButton(
+                    onClick = {
+                        webView?.reload()
+                    }
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = "새로고침")
+                }
             }
             
             // 로딩 인디케이터
@@ -423,7 +435,8 @@ fun WebBrowserScreen() {
                                 scope.launch {
                                     try {
                                         val mediaDownloader = MediaDownloader(context)
-                                        val result = mediaDownloader.downloadBase64Video(filename, base64Data)
+                                        val postId = System.currentTimeMillis().toString() // 포스트별 고유 ID 생성
+                                        val result = mediaDownloader.downloadBase64Video(filename, base64Data, postId)
 
                                         result.fold(
                                             onSuccess = { savedUri ->
@@ -558,10 +571,12 @@ fun WebBrowserScreen() {
                             val mediaDownloader = MediaDownloader(context)
                             val urls = selectedUrls.map { it.url }
                             val isVideoList = selectedUrls.map { it.type == "video" }
+                            val postId = System.currentTimeMillis().toString() // 포스트별 고유 ID 생성
 
                             val result = mediaDownloader.downloadMediaList(
                                 mediaUrls = urls,
                                 isVideoList = isVideoList,
+                                postId = postId,
                                 onProgress = { current, total ->
                                     // 진행률 업데이트는 Toast로 간단히 처리
                                 },
@@ -588,6 +603,34 @@ fun WebBrowserScreen() {
                 }
             )
         }
+    }
+    
+    // 도움말 다이얼로그
+    if (showHelpDialog) {
+        AlertDialog(
+            onDismissRequest = { showHelpDialog = false },
+            title = { Text("Browser Help") },
+            text = {
+                Column {
+                    Text("1. Please note that you can only log in with your Instagram account within the in-app browser (Facebook login is not supported).")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("2. Tap the download button to collect images.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("3. If you want to reload, click the refresh button in the top right corner.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("4. This app does not collect any personal information under any circumstances.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("5. Videos cannot be collected within the in-app browser. To collect videos, use the URL on the left-side \"Downloader\" tab.")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showHelpDialog = false }
+                ) {
+                    Text("OK")
+                }
+            }
+        )
     }
 }
 

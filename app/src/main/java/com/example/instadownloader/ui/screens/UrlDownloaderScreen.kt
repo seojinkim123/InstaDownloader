@@ -260,12 +260,14 @@ fun UrlDownloaderScreen() {
                     val isVideoList = selectedItems.map { it.type == MediaType.VIDEO }
                     val originalUrls = List(selectedItems.size) { urlText } // 모든 미디어의 원본 Instagram URL
                     val thumbnailUrls = selectedItems.map { if (it.type == MediaType.VIDEO) it.thumbnail else null }
+                    val postId = System.currentTimeMillis().toString() // 포스트별 고유 ID 생성
                     
                     downloader.downloadMediaList(
                         urls,
                         isVideoList,
                         originalUrls,
                         thumbnailUrls,
+                        postId,
                         onProgress = { current, _ ->
                             downloadProgress = current
                         }
@@ -299,8 +301,6 @@ fun UrlDownloaderScreen() {
             title = { Text("Important Information") },
             text = {
                 Column {
-                    Text("1. Please note that you can only log in with your Instagram account within the in-app browser (Facebook login is not supported).")
-                    Spacer(modifier = Modifier.height(8.dp))
                     Text("2. You can download posts from private accounts or those with age restrictions after logging in within the in-app browser.")
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("3. If you make too many requests in a short period, your access may be temporarily limited.")

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
@@ -19,6 +20,7 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.instadownloader.data.repository.GalleryRepository
 import com.example.instadownloader.data.repository.GalleryMediaItem
+import com.example.instadownloader.ui.components.ZoomableImageViewer
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,6 +31,10 @@ fun GalleryScreen() {
     var mediaItems by remember { mutableStateOf<List<GalleryMediaItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var selectedMedia by remember { mutableStateOf<GalleryMediaItem?>(null) }
+    var viewerMediaItems by remember { mutableStateOf<List<GalleryMediaItem>>(emptyList()) }
+    var viewerInitialPage by remember { mutableStateOf(0) }
+    var showViewer by remember { mutableStateOf(false) }
+    var isPostGroupView by remember { mutableStateOf(true) }
     
     val context = LocalContext.current
     val repository = remember { GalleryRepository(context) }
@@ -68,13 +74,25 @@ fun GalleryScreen() {
             }
         }
         
-        // 미디어 개수 표시
-        Text(
-            text = "Total ${mediaItems.size} items",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // 미디어 개수 표시 및 토글
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Total ${mediaItems.size} items",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Switch(
+                checked = isPostGroupView,
+                onCheckedChange = { isPostGroupView = it }
+            )
+        }
         
         if (isLoading) {
             // 로딩 상태
@@ -101,31 +119,56 @@ fun GalleryScreen() {
                 }
             }
         } else {
-            // 미디어 그리드
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(mediaItems) { media ->
-                    GalleryMediaCard(
-                        media = media,
-                        onClick = {
-                            selectedMedia = media
-                        },
-                        onDelete = {
-                            coroutineScope.launch {
-                                repository.deleteMedia(media)
-                                // 삭제 후 목록 새로고침
-                                mediaItems = when (selectedFilter) {
-                                    "Images" -> repository.getMediaByType("image")
-                                    "Videos" -> repository.getMediaByType("video")
-                                    else -> repository.getAllMedia()
+            if (isPostGroupView) {
+                // 포스트별 그룹화된 뷰
+                val groupedMedia = mediaItems.groupBy { it.postId ?: it.id }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(groupedMedia.toList()) { (postId, mediaList) ->
+                        PostGroupCard(
+                            mediaItems = mediaList,
+                            onClick = {
+                                viewerMediaItems = mediaList
+                                viewerInitialPage = 0
+                                showViewer = true
+                            }
+                        )
+                    }
+                }
+            } else {
+                // 개별 미디어 그리드 (기존 방식)
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(mediaItems) { media ->
+                        val index = mediaItems.indexOf(media)
+                        GalleryMediaCard(
+                            media = media,
+                            onClick = {
+                                viewerMediaItems = mediaItems
+                                viewerInitialPage = index
+                                showViewer = true
+                            },
+                            onDelete = {
+                                coroutineScope.launch {
+                                    repository.deleteMedia(media)
+                                    // 삭제 후 목록 새로고침
+                                    mediaItems = when (selectedFilter) {
+                                        "Images" -> repository.getMediaByType("image")
+                                        "Videos" -> repository.getMediaByType("video")
+                                        else -> repository.getAllMedia()
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -225,6 +268,15 @@ fun GalleryScreen() {
             }
         }
     }
+    
+    // 이미지 뷰어
+    if (showViewer) {
+        ZoomableImageViewer(
+            mediaItems = viewerMediaItems,
+            initialPage = viewerInitialPage,
+            onDismiss = { showViewer = false }
+        )
+    }
 }
 
 @Composable
@@ -312,5 +364,64 @@ private fun GalleryMediaCard(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun PostGroupCard(
+    mediaItems: List<GalleryMediaItem>,
+    onClick: () -> Unit
+) {
+    val firstMedia = mediaItems.first()
+    val mediaCount = mediaItems.size
+    
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .aspectRatio(1f)
+            .fillMaxWidth()
+    ) {
+        Box {
+            // 대표 이미지 (첫 번째 미디어)
+            AsyncImage(
+                model = firstMedia.thumbnailUri,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            
+            // 미디어 개수 배지 (우상단)
+            if (mediaCount > 1) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                ) {
+                    Text(
+                        text = "$mediaCount",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            
+            // 포스트 ID 표시 (좌하단)
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(8.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+            ) {
+                Text(
+                    text = if (firstMedia.postId != null) "Post" else "Single",
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
     }
 }

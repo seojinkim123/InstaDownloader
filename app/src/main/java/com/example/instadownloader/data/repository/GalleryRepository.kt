@@ -24,7 +24,8 @@ data class GalleryMediaItem(
     val downloadDate: Long,
     val mediaType: String,
     val fileSize: Long,
-    val thumbnailUri: Uri
+    val thumbnailUri: Uri,
+    val postId: String? = null
 )
 
 class GalleryRepository(private val context: Context) {
@@ -180,7 +181,8 @@ class GalleryRepository(private val context: Context) {
             downloadDate = this.downloadDate,
             mediaType = this.mediaType,
             fileSize = this.fileSize,
-            thumbnailUri = Uri.parse(this.thumbnailPath ?: this.filePath)
+            thumbnailUri = Uri.parse(this.thumbnailPath ?: this.filePath),
+            postId = this.postId
         )
     }
 }

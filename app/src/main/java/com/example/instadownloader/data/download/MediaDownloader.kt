@@ -28,6 +28,7 @@ class MediaDownloader(private val context: Context) {
         isVideo: Boolean = false,
         originalUrl: String = url,
         thumbnailUrl: String? = null,
+        postId: String? = null,
         onProgress: (Int) -> Unit = {}
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -120,7 +121,8 @@ class MediaDownloader(private val context: Context) {
                 downloadDate = System.currentTimeMillis(),
                 mediaType = if (isVideo) "video" else "image",
                 fileSize = contentLength,
-                thumbnailPath = if (isVideo) thumbnailPath else uri.toString()
+                thumbnailPath = if (isVideo) thumbnailPath else uri.toString(),
+                postId = postId
             )
             
             mediaDao.insertMedia(mediaEntity)
@@ -197,6 +199,7 @@ class MediaDownloader(private val context: Context) {
         isVideoList: List<Boolean>,
         originalUrls: List<String> = mediaUrls,
         thumbnailUrls: List<String?> = List(mediaUrls.size) { null },
+        postId: String? = null,
         onProgress: (Int, Int) -> Unit = { _, _ -> }, // current, total
         onItemComplete: (Int, String) -> Unit = { _, _ -> }
     ): Result<List<String>> = withContext(Dispatchers.IO) {
@@ -209,7 +212,7 @@ class MediaDownloader(private val context: Context) {
                 val thumbnailUrl = thumbnailUrls.getOrElse(index) { null }
                 val filename = generateFilename(url, isVideo)
                 
-                val result = downloadMedia(url, filename, isVideo, originalUrl, thumbnailUrl) { itemProgress ->
+                val result = downloadMedia(url, filename, isVideo, originalUrl, thumbnailUrl, postId) { itemProgress ->
                     // 개별 파일 진행률을 전체 진행률로 변환
                     val totalProgress = (index * 100 + itemProgress) / mediaUrls.size
                     onProgress(totalProgress, 100)
@@ -236,6 +239,7 @@ class MediaDownloader(private val context: Context) {
     suspend fun downloadBase64Video(
         filename: String,
         base64Data: String,
+        postId: String? = null,
         onProgress: (Int) -> Unit = {}
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -295,7 +299,8 @@ class MediaDownloader(private val context: Context) {
                 downloadDate = System.currentTimeMillis(),
                 mediaType = "video",
                 fileSize = videoBytes.size.toLong(),
-                thumbnailPath = uri.toString()
+                thumbnailPath = uri.toString(),
+                postId = postId
             )
             
             mediaDao.insertMedia(mediaEntity)

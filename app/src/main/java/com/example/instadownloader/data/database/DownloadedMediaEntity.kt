@@ -12,5 +12,6 @@ data class DownloadedMediaEntity(
     val downloadDate: Long,
     val mediaType: String, // "image" or "video"
     val fileSize: Long,
-    val thumbnailPath: String? = null
+    val thumbnailPath: String? = null,
+    val postId: String? = null // 포스트별 그룹화를 위한 ID
 )

@@ -873,12 +873,8 @@ private fun getInstagramScript(): String {
                     }
                 });
                 
-                const videos = container.querySelectorAll('video');
-                videos.forEach(video => {
-                    if (video.src) {
-                        mediaItems.push('video::' + video.src);
-                    }
-                });
+                // 동영상은 건너뛰기 (더 이상 처리하지 않음)
+                console.log('동영상 감지됨 - 건너뛰기');
             }
             
             async function extractCarouselMediaWithUpdates(container, mediaItems) {
@@ -941,20 +937,11 @@ private fun getInstagramScript(): String {
                                     }
                                 }
                                 
-                                // 비디오 확인
+                                // 비디오는 건너뛰기 (수집하지 않지만 계속 진행)
                                 const video = li.querySelector('video');
                                 if (video) {
-                                    let videoUrl = video.src;
-                                    if (!videoUrl) {
-                                        const source = video.querySelector('source');
-                                        if (source) videoUrl = source.src;
-                                    }
-                                    
-                                    if (videoUrl && !mediaItems.some(item => item.includes(videoUrl))) {
-                                        const videoType = videoUrl.startsWith('blob:') ? 'video-blob' : 'video';
-                                        mediaItems.push(videoType + '::' + videoUrl);
-                                        hasCollectedInThisIteration = true;
-                                    }
+                                    console.log('캐러셀에서 동영상 감지됨 - 건너뛰고 계속 진행');
+                                    hasCollectedInThisIteration = true; // 진행했다고 표시하여 루프 지속
                                 }
                             }
                         });

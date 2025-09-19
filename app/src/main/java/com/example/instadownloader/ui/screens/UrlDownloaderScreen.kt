@@ -309,9 +309,9 @@ fun UrlDownloaderScreen() {
             title = { Text("Important Information") },
             text = {
                 Column {
-                    Text("2. You can download posts from private accounts or those with age restrictions after logging in within the in-app browser.")
+                    Text("1. You can download posts from private accounts or those with age restrictions after logging in within the in-app browser.")
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("3. If you make too many requests in a short period, your access may be temporarily limited.")
+                    Text("2. If you make too many requests in a short period, your access may be temporarily limited.")
                 }
             },
             confirmButton = {

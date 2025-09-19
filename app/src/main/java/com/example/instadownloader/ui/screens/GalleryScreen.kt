@@ -395,20 +395,24 @@ private fun PostGroupCard(
                 contentScale = ContentScale.Crop
             )
             
-            // 미디어 개수 배지 (우상단)
+            // 미디어 개수 표시 (우상단) - owner 스타일과 유사하게
             if (mediaCount > 1) {
-                Surface(
+                Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                        .padding(8.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.7f),
+                            CircleShape
+                        )
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = "$mediaCount",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = Color.White,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }

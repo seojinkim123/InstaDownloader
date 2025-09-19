@@ -135,9 +135,9 @@ fun GalleryScreen() {
                 ) {
                     items(groupedMedia.toList()) { (postId, mediaList) ->
                         PostGroupCard(
-                            mediaItems = mediaList,
+                            mediaItems = mediaList.sortedBy { it.downloadDate },
                             onClick = {
-                                viewerMediaItems = mediaList
+                                viewerMediaItems = mediaList.sortedBy { it.downloadDate }
                                 viewerInitialPage = 0
                                 showViewer = true
                             }

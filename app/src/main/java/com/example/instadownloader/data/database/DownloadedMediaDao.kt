@@ -5,13 +5,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DownloadedMediaDao {
-    @Query("SELECT * FROM downloaded_media ORDER BY downloadDate ASC")
+    @Query("SELECT * FROM downloaded_media ORDER BY downloadDate DESC")
     fun getAllMediaFlow(): Flow<List<DownloadedMediaEntity>>
     
-    @Query("SELECT * FROM downloaded_media ORDER BY downloadDate ASC")
+    @Query("SELECT * FROM downloaded_media ORDER BY downloadDate DESC")
     suspend fun getAllMedia(): List<DownloadedMediaEntity>
     
-    @Query("SELECT * FROM downloaded_media WHERE mediaType = :type ORDER BY downloadDate ASC")
+    @Query("SELECT * FROM downloaded_media WHERE mediaType = :type ORDER BY downloadDate DESC")
     suspend fun getMediaByType(type: String): List<DownloadedMediaEntity>
     
     @Query("SELECT * FROM downloaded_media WHERE id = :id")

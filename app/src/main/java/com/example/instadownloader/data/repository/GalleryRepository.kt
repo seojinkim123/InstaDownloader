@@ -25,7 +25,10 @@ data class GalleryMediaItem(
     val mediaType: String,
     val fileSize: Long,
     val thumbnailUri: Uri,
-    val postId: String? = null
+    val postId: String? = null,
+    val ownerId: String? = null,
+    val ownerUsername: String? = null,
+    val ownerProfilePicUrl: String? = null
 )
 
 class GalleryRepository(private val context: Context) {
@@ -182,7 +185,10 @@ class GalleryRepository(private val context: Context) {
             mediaType = this.mediaType,
             fileSize = this.fileSize,
             thumbnailUri = Uri.parse(this.thumbnailPath ?: this.filePath),
-            postId = this.postId
+            postId = this.postId,
+            ownerId = this.ownerId,
+            ownerUsername = this.ownerUsername,
+            ownerProfilePicUrl = this.ownerProfilePicUrl
         )
     }
 }

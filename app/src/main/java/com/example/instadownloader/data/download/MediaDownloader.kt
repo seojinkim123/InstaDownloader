@@ -29,6 +29,9 @@ class MediaDownloader(private val context: Context) {
         originalUrl: String = url,
         thumbnailUrl: String? = null,
         postId: String? = null,
+        ownerId: String? = null,
+        ownerUsername: String? = null,
+        ownerProfilePicUrl: String? = null,
         onProgress: (Int) -> Unit = {}
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -122,7 +125,10 @@ class MediaDownloader(private val context: Context) {
                 mediaType = if (isVideo) "video" else "image",
                 fileSize = contentLength,
                 thumbnailPath = if (isVideo) thumbnailPath else uri.toString(),
-                postId = postId
+                postId = postId,
+                ownerId = ownerId,
+                ownerUsername = ownerUsername,
+                ownerProfilePicUrl = ownerProfilePicUrl
             )
             
             mediaDao.insertMedia(mediaEntity)
@@ -200,6 +206,9 @@ class MediaDownloader(private val context: Context) {
         originalUrls: List<String> = mediaUrls,
         thumbnailUrls: List<String?> = List(mediaUrls.size) { null },
         postId: String? = null,
+        ownerId: String? = null,
+        ownerUsername: String? = null,
+        ownerProfilePicUrl: String? = null,
         onProgress: (Int, Int) -> Unit = { _, _ -> }, // current, total
         onItemComplete: (Int, String) -> Unit = { _, _ -> }
     ): Result<List<String>> = withContext(Dispatchers.IO) {
@@ -212,7 +221,7 @@ class MediaDownloader(private val context: Context) {
                 val thumbnailUrl = thumbnailUrls.getOrElse(index) { null }
                 val filename = generateFilename(url, isVideo)
                 
-                val result = downloadMedia(url, filename, isVideo, originalUrl, thumbnailUrl, postId) { itemProgress ->
+                val result = downloadMedia(url, filename, isVideo, originalUrl, thumbnailUrl, postId, ownerId, ownerUsername, ownerProfilePicUrl) { itemProgress ->
                     // 개별 파일 진행률을 전체 진행률로 변환
                     val totalProgress = (index * 100 + itemProgress) / mediaUrls.size
                     onProgress(totalProgress, 100)
@@ -240,6 +249,9 @@ class MediaDownloader(private val context: Context) {
         filename: String,
         base64Data: String,
         postId: String? = null,
+        ownerId: String? = null,
+        ownerUsername: String? = null,
+        ownerProfilePicUrl: String? = null,
         onProgress: (Int) -> Unit = {}
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
@@ -300,7 +312,10 @@ class MediaDownloader(private val context: Context) {
                 mediaType = "video",
                 fileSize = videoBytes.size.toLong(),
                 thumbnailPath = uri.toString(),
-                postId = postId
+                postId = postId,
+                ownerId = ownerId,
+                ownerUsername = ownerUsername,
+                ownerProfilePicUrl = ownerProfilePicUrl
             )
             
             mediaDao.insertMedia(mediaEntity)

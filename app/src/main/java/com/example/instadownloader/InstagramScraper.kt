@@ -7,6 +7,12 @@ import java.net.URLEncoder
 import com.example.instadownloader.data.model.MediaItem
 import com.example.instadownloader.data.model.MediaType
 
+data class OwnerInfo(
+    val id: String,
+    val username: String,
+    val profilePicUrl: String
+)
+
 object
 InstagramScraper {
     private const val INSTAGRAM_DOCUMENT_ID = "8845758582119845"
@@ -70,6 +76,63 @@ InstagramScraper {
             }
 
             return extractMediaItems(mediaJson, quality)
+        }
+    }
+    
+    fun extractOwnerInfo(shortcodeOrUrl: String): OwnerInfo? {
+        // shortcode 추출
+        val shortcode = if (shortcodeOrUrl.contains("http")) {
+            shortcodeOrUrl.split("/p/").last().split("/")[0]
+        } else {
+            shortcodeOrUrl
+        }
+
+        println("인스타그램 Owner 정보 추출 중: $shortcode")
+
+        // variables JSON
+        val variablesJson = JSONObject().apply {
+            put("shortcode", shortcode)
+            put("fetch_tagged_user_count", JSONObject.NULL)
+            put("hoisted_comment_id", JSONObject.NULL)
+            put("hoisted_reply_id", JSONObject.NULL)
+        }.toString()
+
+        val variables = URLEncoder.encode(variablesJson, "UTF-8")
+        val body = "variables=$variables&doc_id=$INSTAGRAM_DOCUMENT_ID"
+
+        // 요청 생성
+        val request = Request.Builder()
+            .url(INSTAGRAM_URL)
+            .post(RequestBody.create("application/x-www-form-urlencoded".toMediaType(), body))
+            .addHeader("content-type", "application/x-www-form-urlencoded")
+            .addHeader("x-csrftoken", "MXu5wPd59xPx1WWFL5jTyfxGsVFKB6Tp")
+            .addHeader("x-ig-app-id", "936619743392459")
+            .addHeader("user-agent", "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36")
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+
+                val jsonStr = response.body?.string() ?: return null
+                val rootJson = JSONObject(jsonStr)
+                
+                // 오류 체크
+                if (rootJson.has("errors")) return null
+                
+                val dataJson = rootJson.optJSONObject("data") ?: return null
+                val mediaJson = dataJson.optJSONObject("xdt_shortcode_media") ?: return null
+                val ownerJson = mediaJson.optJSONObject("owner") ?: return null
+                
+                OwnerInfo(
+                    id = ownerJson.getString("id"),
+                    username = ownerJson.getString("username"),
+                    profilePicUrl = ownerJson.getString("profile_pic_url")
+                )
+            }
+        } catch (e: Exception) {
+            println("Owner 정보 추출 실패: ${e.message}")
+            null
         }
     }
 

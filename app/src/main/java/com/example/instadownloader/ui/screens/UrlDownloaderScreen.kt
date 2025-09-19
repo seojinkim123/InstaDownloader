@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.instadownloader.InstagramScraper
+import com.example.instadownloader.OwnerInfo
 import com.example.instadownloader.data.download.MediaDownloader
 import com.example.instadownloader.data.model.MediaItem
 import com.example.instadownloader.data.model.MediaType
@@ -41,6 +42,7 @@ import kotlinx.coroutines.launch
 fun UrlDownloaderScreen() {
     var urlText by remember { mutableStateOf("") }
     var mediaItems by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
+    var ownerInfo by remember { mutableStateOf<OwnerInfo?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showMediaDialog by remember { mutableStateOf(false) }
@@ -150,12 +152,15 @@ fun UrlDownloaderScreen() {
                             val postId = extractPostIdFromUrl(urlText)
                             println("Extracted Post ID: $postId from URL: $urlText")
                             if (postId != null) {
-                                val items = withContext(Dispatchers.IO) {
-                                    InstagramScraper.scrapePostMedia(postId, "high")
+                                val (items, owner) = withContext(Dispatchers.IO) {
+                                    val mediaItems = InstagramScraper.scrapePostMedia(postId, "high")
+                                    val ownerInfo = InstagramScraper.extractOwnerInfo(postId)
+                                    Pair(mediaItems, ownerInfo)
                                 }
                                 
                                 withContext(Dispatchers.Main) {
                                     mediaItems = items
+                                    ownerInfo = owner
                                     selectedMediaItems = items.indices.toSet() // 전체 선택을 디폴트로 설정
                                     isLoading = false
                                     if (items.isNotEmpty()) {
@@ -268,6 +273,9 @@ fun UrlDownloaderScreen() {
                         originalUrls,
                         thumbnailUrls,
                         postId,
+                        ownerInfo?.id,
+                        ownerInfo?.username,
+                        ownerInfo?.profilePicUrl,
                         onProgress = { current, _ ->
                             downloadProgress = current
                         }

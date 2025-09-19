@@ -649,6 +649,9 @@ fun WebBrowserScreen() {
                     Text("4. This app does not collect any personal information under any circumstances.")
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("5. Videos cannot be collected within the in-app browser. To collect videos, use the URL on the left-side \"Downloader\" tab.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("6. If you encounter ERR_TOO_MANY_REDIRECTS, please clear cache in your device storage settings.")
+
                 }
             },
             confirmButton = {

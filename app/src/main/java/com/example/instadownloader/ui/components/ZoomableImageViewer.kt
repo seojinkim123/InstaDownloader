@@ -4,6 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -46,102 +51,113 @@ fun ZoomableImageViewer(
         properties = DialogProperties(
             dismissOnBackPress = true,
             dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false
+            usePlatformDefaultWidth = false,   // 풀스크린 느낌으로
+            decorFitsSystemWindows = false     // 인셋은 내가 처리
         )
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.9f)
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars) // 시스템 바 인셋 처리
                 .background(Color.Black)
         ) {
-            val pagerState = rememberPagerState(
-                initialPage = initialPage,
-                pageCount = { mediaItems.size }
-            )
-            
-            // 미디어 페이저 (이미지/비디오)
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                val mediaItem = mediaItems[page]
-                if (mediaItem.mediaType == "video") {
-                    VideoPlayer(
-                        mediaItem = mediaItem,
-                        onSingleTap = onDismiss
-                    )
-                } else {
-                    ZoomableImage(
-                        mediaItem = mediaItem,
-                        onSingleTap = onDismiss
-                    )
-                }
-            }
-            
-            // 닫기 버튼 (우상단)
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .background(
-                        Color.Black.copy(alpha = 0.5f),
-                        CircleShape
-                    )
-            ) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = Color.White
-                )
-            }
-            
-            // 좌상단 컨트롤
             Column(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
-                // 페이지 번호
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Color.Black.copy(alpha = 0.5f),
-                            RoundedCornerShape(12.dp)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                val pagerState = rememberPagerState(
+                    initialPage = initialPage,
+                    pageCount = { mediaItems.size }
+                )
+                
+                // 미디어 페이저 (이미지/비디오)
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    val mediaItem = mediaItems[page]
+                    if (mediaItem.mediaType == "video") {
+                        VideoPlayer(
+                            mediaItem = mediaItem,
+                            onSingleTap = onDismiss
                         )
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "${pagerState.currentPage + 1} / ${mediaItems.size}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                
-                // Owner 정보 표시 (페이지 번호 바로 아래)
-                val currentMedia = mediaItems[pagerState.currentPage]
-                
-                // Owner 정보가 있을 때만 표시
-                if (currentMedia.ownerUsername != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Color.White.copy(alpha = 0.9f),
-                                RoundedCornerShape(16.dp)
-                            )
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "@${currentMedia.ownerUsername}",
-                            color = Color.Black,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
+                    } else {
+                        ZoomableImage(
+                            mediaItem = mediaItem,
+                            onSingleTap = onDismiss
                         )
                     }
                 }
+                
+                // 닫기 버튼 (우상단)
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .background(
+                            Color.Black.copy(alpha = 0.5f),
+                            CircleShape
+                        )
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.White
+                    )
+                }
+                
+                // 좌상단 컨트롤
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(16.dp)
+                ) {
+                    // 페이지 번호
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                Color.Black.copy(alpha = 0.5f),
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "${pagerState.currentPage + 1} / ${mediaItems.size}",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    
+                    // Owner 정보 표시 (페이지 번호 바로 아래)
+                    val currentMedia = mediaItems[pagerState.currentPage]
+                    
+                    // Owner 정보가 있을 때만 표시
+                    if (currentMedia.ownerUsername != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Color.White.copy(alpha = 0.9f),
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "@${currentMedia.ownerUsername}",
+                                color = Color.Black,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
             }
         }
     }

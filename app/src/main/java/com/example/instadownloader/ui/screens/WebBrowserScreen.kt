@@ -44,6 +44,7 @@ import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.example.instadownloader.data.download.MediaDownloader
+import com.example.instadownloader.OwnerInfo
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.DisposableEffect
 import java.lang.ref.WeakReference
@@ -145,7 +146,8 @@ object WebViewManager {
 data class InstagramMediaItem(
     val url: String,
     val type: String, // "image" or "video"
-    val isSelected: Boolean = true
+    val isSelected: Boolean = true,
+    val ownerInfo: OwnerInfo? = null
 )
 
 class WebViewInterface(
@@ -210,12 +212,21 @@ class WebViewInterface(
 
     private fun parseMediaJson(json: String): List<InstagramMediaItem> {
         return json.split("||").mapNotNull { item ->
-            val parts = item.split("::", limit = 2)
-            if (parts.size == 2) {
+            val parts = item.split("::", limit = 5) // type::url::username::profilePicUrl::ownerId
+            if (parts.size >= 2) {
+                val ownerInfo = if (parts.size >= 4 && parts[2].isNotEmpty() && parts[3].isNotEmpty()) {
+                    OwnerInfo(
+                        id = if (parts.size >= 5) parts[4] else "",
+                        username = parts[2],
+                        profilePicUrl = parts[3]
+                    )
+                } else null
+                
                 InstagramMediaItem(
                     url = parts[1],
                     type = parts[0],
-                    isSelected = true
+                    isSelected = true,
+                    ownerInfo = ownerInfo
                 )
             } else null
         }
@@ -436,7 +447,18 @@ fun WebBrowserScreen() {
                                     try {
                                         val mediaDownloader = MediaDownloader(context)
                                         val postId = System.currentTimeMillis().toString() // 포스트별 고유 ID 생성
-                                        val result = mediaDownloader.downloadBase64Video(filename, base64Data, postId)
+                                        
+                                        // 현재 바텀시트의 미디어에서 owner 정보 가져오기 (첫 번째 미디어의 owner 정보 사용)
+                                        val ownerInfo = mediaItemsState.firstOrNull()?.ownerInfo
+                                        
+                                        val result = mediaDownloader.downloadBase64Video(
+                                            filename = filename, 
+                                            base64Data = base64Data, 
+                                            postId = postId,
+                                            ownerId = ownerInfo?.id,
+                                            ownerUsername = ownerInfo?.username,
+                                            ownerProfilePicUrl = ownerInfo?.profilePicUrl
+                                        )
 
                                         result.fold(
                                             onSuccess = { savedUri ->
@@ -572,11 +594,17 @@ fun WebBrowserScreen() {
                             val urls = selectedUrls.map { it.url }
                             val isVideoList = selectedUrls.map { it.type == "video" }
                             val postId = System.currentTimeMillis().toString() // 포스트별 고유 ID 생성
+                            
+                            // owner 정보 추출 (첫 번째 미디어의 owner 정보 사용)
+                            val ownerInfo = selectedUrls.firstOrNull()?.ownerInfo
 
                             val result = mediaDownloader.downloadMediaList(
                                 mediaUrls = urls,
                                 isVideoList = isVideoList,
                                 postId = postId,
+                                ownerId = ownerInfo?.id,
+                                ownerUsername = ownerInfo?.username,
+                                ownerProfilePicUrl = ownerInfo?.profilePicUrl,
                                 onProgress = { current, total ->
                                     // 진행률 업데이트는 Toast로 간단히 처리
                                 },
@@ -812,6 +840,51 @@ private fun getInstagramScript(): String {
                 });
             }
             
+            // Owner 정보 추출 함수
+            function extractOwnerInfo(article) {
+                try {
+                    let username = null;
+                    let profilePicUrl = null;
+                    
+                    // 1. Username 추출: <article> 자손 중 <a> 이면서 role="link"과 href를 속성으로 갖는 요소
+                    const linkElements = article.querySelectorAll('a[role="link"][href]');
+                    for (const link of linkElements) {
+                        const href = link.getAttribute('href');
+                        if (href && href.startsWith('/') && !href.includes('/p/') && !href.includes('/reel/')) {
+                            // href에서 양쪽 끝 '/' 제거하여 username 추출
+                            const cleanHref = href.replace(/^\/+|\/+$/g, '');
+                            if (cleanHref && !cleanHref.includes('/')) {
+                                username = cleanHref;
+                                console.log('Username found:', username);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 2. Profile picture URL 추출: <article> 자손 중 <canvas>의 형제 요소(바로 다음)의 자식 <img> 요소
+                    const canvasElements = article.querySelectorAll('canvas');
+                    for (const canvas of canvasElements) {
+                        const nextSibling = canvas.nextElementSibling;
+                        if (nextSibling) {
+                            const img = nextSibling.querySelector('img');
+                            if (img && img.src) {
+                                profilePicUrl = img.src;
+                                console.log('Profile pic URL found:', profilePicUrl);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    return {
+                        username: username,
+                        profilePicUrl: profilePicUrl
+                    };
+                } catch (error) {
+                    console.log('Error extracting owner info:', error);
+                    return { username: null, profilePicUrl: null };
+                }
+            }
+            
             // 포스트 고유 키 생성 (URL 기반)
             function generatePostKey(article) {
                 // 포스트 URL을 찾는 여러 방법 시도
@@ -852,13 +925,17 @@ private fun getInstagramScript(): String {
                     if (cachedData && cachedData !== 'null') {
                         console.log('🎯 Found cached media for post:', postKey);
                         return cachedData.split('||').map(item => {
-                            const parts = item.split('::', 2);
-                            return parts.length === 2 ? parts[0] + '::' + parts[1] : item;
+                            const parts = item.split('::', 5);
+                            return parts.length >= 2 ? item : parts[0] + '::' + parts[1];
                         });
                     }
                 } catch (e) {
                     console.log('Cache check failed:', e);
                 }
+                
+                // Owner 정보 추출
+                const ownerInfo = extractOwnerInfo(article);
+                console.log('Owner info extracted:', ownerInfo);
                 
                 const mediaItems = [];
                 
@@ -887,10 +964,10 @@ private fun getInstagramScript(): String {
                 
                 if (isCarousel) {
                     // 캐러셀 처리 (실시간 업데이트)
-                    await extractCarouselMediaWithUpdates(mainContainer, mediaItems);
+                    await extractCarouselMediaWithUpdates(mainContainer, mediaItems, ownerInfo);
                 } else {
                     // 단일 이미지/영상 처리
-                    extractSingleMedia(mainContainer, mediaItems);
+                    extractSingleMedia(mainContainer, mediaItems, ownerInfo);
                 }
                 
                 console.log('Total media found: ' + mediaItems.length);
@@ -908,11 +985,12 @@ private fun getInstagramScript(): String {
                 return mediaItems;
             }
             
-            function extractSingleMedia(container, mediaItems) {
+            function extractSingleMedia(container, mediaItems, ownerInfo) {
                 const images = container.querySelectorAll('img[src*="scontent"]');
                 images.forEach(img => {
                     if (!img.src.includes('profile')) {
-                        mediaItems.push('image::' + img.src);
+                        const mediaData = formatMediaData('image', img.src, ownerInfo);
+                        mediaItems.push(mediaData);
                     }
                 });
                 
@@ -920,7 +998,15 @@ private fun getInstagramScript(): String {
                 console.log('동영상 감지됨 - 건너뛰기');
             }
             
-            async function extractCarouselMediaWithUpdates(container, mediaItems) {
+            // 미디어 데이터 포맷 함수
+            function formatMediaData(type, url, ownerInfo) {
+                const username = ownerInfo?.username || '';
+                const profilePicUrl = ownerInfo?.profilePicUrl || '';
+                const ownerId = ''; // WebBrowser에서는 ID를 알 수 없으므로 빈 문자열
+                return type + '::' + url + '::' + username + '::' + profilePicUrl + '::' + ownerId;
+            }
+            
+            async function extractCarouselMediaWithUpdates(container, mediaItems, ownerInfo) {
                 console.log('Processing carousel with real-time updates');
                 
                 let currentIndex = 0;
@@ -975,7 +1061,8 @@ private fun getInstagramScript(): String {
                                 if (img && !img.src.includes('profile')) {
                                     const isDuplicate = mediaItems.some(item => item.includes(img.src));
                                     if (!isDuplicate) {
-                                        mediaItems.push('image::' + img.src);
+                                        const mediaData = formatMediaData('image', img.src, ownerInfo);
+                                        mediaItems.push(mediaData);
                                         hasCollectedInThisIteration = true;
                                     }
                                 }

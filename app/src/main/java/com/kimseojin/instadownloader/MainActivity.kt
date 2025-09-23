@@ -1,0 +1,103 @@
+package com.kimseojin.instadownloader
+
+import android.os.Bundle
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import com.google.android.gms.ads.MobileAds
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import com.kimseojin.instadownloader.ui.screens.GalleryScreen
+import com.kimseojin.instadownloader.ui.screens.UrlDownloaderScreen
+import com.kimseojin.instadownloader.ui.screens.WebBrowserScreen
+import com.kimseojin.instadownloader.ui.theme.InstaDownloaderTheme
+
+sealed class Screen(val route: String, val title: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    object UrlDownloader : Screen("url_downloader", "Downloader", Icons.Default.Home)
+    object WebBrowser : Screen("web_browser", "Browser", Icons.Default.Search)
+    object Gallery : Screen("gallery", "Gallery", Icons.Default.Settings)
+}
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        
+        // AdMob SDK 초기화
+        MobileAds.initialize(this) { initializationStatus ->
+            Log.d("AdMob", "SDK 초기화 완료")
+        }
+        
+        setContent {
+            InstaDownloaderTheme {
+                MainApp()
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainApp() {
+    val navController = rememberNavController()
+    val screens = listOf(
+        Screen.UrlDownloader,
+        Screen.WebBrowser,
+        Screen.Gallery
+    )
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            NavigationBar {
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentDestination = navBackStackEntry?.destination
+
+                screens.forEach { screen ->
+                    NavigationBarItem(
+                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        label = { Text(screen.title) },
+                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                        onClick = {
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = Screen.UrlDownloader.route,
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None }
+        ) {
+            composable(Screen.UrlDownloader.route) { UrlDownloaderScreen() }
+            composable(Screen.WebBrowser.route) { WebBrowserScreen() }
+            composable(Screen.Gallery.route) { GalleryScreen() }
+        }
+    }
+}

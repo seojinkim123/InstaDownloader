@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.instadownloader"
+    namespace = "com.kimseojin.instadownloader"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.instadownloader"
+        applicationId = "com.kimseojin.instadownloader"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -71,6 +71,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.2.0")
     implementation("androidx.media3:media3-ui:1.2.0")
     
+    // Google Mobile Ads (AdMob)
+    implementation("com.google.android.gms:play-services-ads:22.6.0")
+    
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -79,4 +82,8 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+
+    //추가 admob관련
+    implementation("com.google.android.gms:play-services-ads:23.0.0")
 }

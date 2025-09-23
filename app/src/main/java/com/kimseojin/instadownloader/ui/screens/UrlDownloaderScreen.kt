@@ -32,6 +32,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.kimseojin.instadownloader.utils.ToastUtils
 import com.kimseojin.instadownloader.ui.components.AdMobBanner
+import com.kimseojin.instadownloader.ui.components.InterstitialAdManager
+import androidx.activity.ComponentActivity
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,8 +51,10 @@ fun UrlDownloaderScreen() {
     var showHelpDialog by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
+    val activity = context as? ComponentActivity
     val clipboardManager = LocalClipboardManager.current
     val downloader = remember { MediaDownloader(context) }
+    val interstitialAdManager = remember { InterstitialAdManager(context) }
     val coroutineScope = rememberCoroutineScope()
     
     Column(
@@ -235,7 +239,10 @@ fun UrlDownloaderScreen() {
         Spacer(modifier = Modifier.height(16.dp))
         
         AdMobBanner(
-            adUnitId = "ca-app-pub-7064030534194691/9008672341",
+            // 테스트용 배너 광고 ID (개발 중 사용)
+            adUnitId = "ca-app-pub-3940256099942544/6300978111",
+            // 실제 배너 광고 ID (배포 시 사용)
+            // adUnitId = "ca-app-pub-7064030534194691/9008672341",
             modifier = Modifier.padding(vertical = 8.dp)
         )
     }
@@ -290,7 +297,17 @@ fun UrlDownloaderScreen() {
                             showMediaDialog = false
                             // WebView 메모리 보호 해제
                             WebViewManager.releaseWebViewProtection()
-                            ToastUtils.showDownloadComplete(context, savedUris.size)
+                            
+                            // 다운로드 완료 후 전면 광고 표시
+                            activity?.let { act ->
+                                interstitialAdManager.showAd(act) {
+                                    // 광고 닫힌 후 토스트 표시
+                                    ToastUtils.showDownloadComplete(context, savedUris.size)
+                                }
+                            } ?: run {
+                                // Activity가 없는 경우 바로 토스트 표시
+                                ToastUtils.showDownloadComplete(context, savedUris.size)
+                            }
                         },
                         onFailure = { error ->
                             isDownloading = false
